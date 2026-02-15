@@ -83,7 +83,7 @@ You need a wildcard DNS record (`*.your-domain.com`) pointing to your server so 
 Copy the `SKILL.md`, `scripts/`, and `references/` directories into your OpenClaw workspace:
 
 ```
-$HOME/openclaw/workspace/skills/devbox/
+$HOME/openclaw/workspace/skills/devboxes/
 ├── SKILL.md
 ├── scripts/
 │   ├── Dockerfile
@@ -96,13 +96,13 @@ $HOME/openclaw/workspace/skills/devbox/
 
 Once the skill files are in place, simply ask your OpenClaw agent:
 
-> "Set up the devbox skill"
+> "Set up the devboxes skill"
 
 The agent will read the skill's onboarding instructions and handle everything:
 - Pull the Docker image
 - Create the Traefik network (if needed)
 - Set up the counter file and permissions
-- Configure `openclaw.json` with the devbox agent
+- Configure `openclaw.json` with the devboxes agent
 - Ask you for your domain and GitHub token
 
 ### 3. Spawn a devbox
