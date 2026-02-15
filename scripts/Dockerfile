@@ -114,6 +114,10 @@ RUN set -eux; \
        "${OPENVSCODE_SERVER_ROOT}/bin/remote-cli/code"; \
     rm -f "${OPENVSCODE_RELEASE}-linux-${arch}.tar.gz"
 
+# Install essential VSCode extensions
+RUN ${OPENVSCODE_SERVER_ROOT}/bin/openvscode-server --install-extension vscode.git 2>/dev/null || true; \
+    ${OPENVSCODE_SERVER_ROOT}/bin/openvscode-server --install-extension vscode.git-base 2>/dev/null || true
+
 ####################################################################################
 # Stage 5: Final
 ####################################################################################
