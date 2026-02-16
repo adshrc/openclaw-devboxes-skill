@@ -1,11 +1,11 @@
 ---
 name: devboxes
-description: Manage development environment containers (devboxes) with web-accessible VSCode, VNC, and app routing via Traefik. Use when the user asks to create, start, stop, list, or manage devboxes/dev environments, spin up a development container, set up a coding sandbox, or configure the devbox infrastructure for the first time (onboarding).
+description: Manage development environment containers (devboxes) with web-accessible VSCode, VNC, and app routing via Traefik or Cloudflare Tunnels. Use when the user asks to create, start, stop, list, or manage devboxes/dev environments, spin up a development container, set up a coding sandbox, or configure the devbox infrastructure for the first time (onboarding).
 ---
 
 # Devbox Skill
 
-Devboxes are OpenClaw sandbox containers running a custom image with VSCode Web, noVNC, Chromium (CDP), and up to 5 app ports routed via Traefik.
+Devboxes are OpenClaw sandbox containers running a custom image with VSCode Web, noVNC, Chromium (CDP), and up to 5 app ports routed via **Traefik** or **Cloudflare Tunnels**.
 
 OpenClaw manages the full container lifecycle. Containers **self-register** — the entrypoint auto-assigns an ID, writes Traefik routes, and builds `APP_URL_*` env vars. The main agent just spawns and reports URLs.
 
@@ -22,7 +22,7 @@ Key files:
 - **Agent id:** `devbox` (configured in openclaw.json)
 - **Sandbox mode:** `all` / `scope: session` — one container per session
 - **Image:** `ghcr.io/adshrc/openclaw-devbox:latest` (pulled from GHCR, not built locally)
-- **Network:** `traefik` (for routing and git access)
+- **Network:** `traefik` (for Traefik routing) or default Docker network (for Cloudflare Tunnel routing)
 - **Browser:** `sandbox.browser.enabled: true`, CDP on port 9222
 
 ### Self-Registration (entrypoint)
@@ -31,7 +31,9 @@ The container's entrypoint automatically:
 1. Reads and increments `/shared/.devbox-counter` → assigns `DEVBOX_ID`
 2. Builds `APP_URL_1..5`, `VSCODE_URL`, `NOVNC_URL` from tags + domain + ID
 3. Writes `/etc/devbox.env` and `/etc/profile.d/devbox.sh` (available in all shells)
-4. Writes Traefik config to `/traefik/devbox-{id}.yml` (Traefik auto-picks it up)
+4. Routes based on `ROUTING_MODE`:
+   - **`traefik`** (default): Writes Traefik config to `/traefik/devbox-{id}.yml`
+   - **`cloudflared`**: Generates cloudflared ingress config, registers DNS CNAME records via CF API, starts `cloudflared tunnel run`
 
 ### Bind Mounts (configured in openclaw.json)
 
@@ -59,10 +61,16 @@ When the user asks to set up the devbox skill, do the following:
 ### Step 1: Gather info and detect paths
 
 Ask the user for:
+- **Routing mode**: Traefik or Cloudflare Tunnel?
 - **Domain**: with wildcard DNS (`*.domain`) pointing to the server (e.g. `oc.example.com`)
 - **GitHub token** (optional): for cloning private repos inside devboxes
 
+If **Cloudflare Tunnel** is chosen, also ask for:
+- **Cloudflare API token**: must have permissions for the zone (DNS edit + Tunnel edit)
+
 ### Step 2: Verify prerequisites
+
+#### If routing mode is Traefik:
 
 ```bash
 # Check that /etc/traefik/dynamic is mounted
@@ -70,6 +78,40 @@ ls /etc/traefik/dynamic
 ```
 
 If `/etc/traefik/dynamic` doesn't exist, tell the user they need to add `-v $HOME/traefik/dynamic:/etc/traefik/dynamic` to their OpenClaw container and restart it.
+
+#### If routing mode is Cloudflare Tunnel:
+
+Validate the CF API token and domain:
+
+```bash
+# 1. Verify token is valid
+curl -s -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+  -H "Authorization: Bearer ${CF_API_TOKEN}" | jq .
+
+# 2. Get zone ID for the domain (extract root domain from the provided domain)
+curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=${ROOT_DOMAIN}" \
+  -H "Authorization: Bearer ${CF_API_TOKEN}" | jq .
+
+# 3. Get account ID from the zone response
+# account_id = .result[0].account.id
+# zone_id = .result[0].id
+```
+
+Then create the tunnel:
+
+```bash
+# 4. Create a named tunnel
+curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/cfd_tunnel" \
+  -H "Authorization: Bearer ${CF_API_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "openclaw-devboxes", "tunnel_secret": "'$(openssl rand -base64 32)'"}' | jq .
+
+# Extract tunnel_id and tunnel_token from the response
+# tunnel_id = .result.id
+# tunnel_token = .result.token
+```
+
+Store the values: `CF_API_TOKEN`, `CF_ZONE_ID`, `CF_ACCOUNT_ID`, `CF_TUNNEL_ID`, `CF_TUNNEL_TOKEN`.
 
 ### Step 3: Create counter file
 
@@ -112,6 +154,7 @@ The patch should add a devbox agent to the agents list:
             "network": "traefik",
             "env": {
               "DEVBOX_DOMAIN": "{domain}",
+              "ROUTING_MODE": "{traefik|cloudflared}",
               "APP_TAG_1": "api",
               "APP_TAG_2": "app",
               "APP_TAG_3": "dashboard",
@@ -119,11 +162,15 @@ The patch should add a devbox agent to the agents list:
               "APP_TAG_5": "app5",
               "ENABLE_VNC": "true",
               "ENABLE_VSCODE": "true",
-              "GITHUB_TOKEN": "{github_token}"
+              "GITHUB_TOKEN": "{github_token}",
+              "CF_TUNNEL_TOKEN": "{cf_tunnel_token (only for cloudflared)}",
+              "CF_API_TOKEN": "{cf_api_token (only for cloudflared)}",
+              "CF_ZONE_ID": "{cf_zone_id (only for cloudflared)}",
+              "CF_TUNNEL_ID": "{cf_tunnel_id (only for cloudflared)}"
             },
             "binds": [
               "/home/node/.openclaw/workspace/skills/devbox/scripts/.devbox-counter:/shared/.devbox-counter:rw",
-              "/etc/traefik/dynamic:/traefik:rw"
+              "/etc/traefik/dynamic:/traefik:rw (only for traefik mode)"
             ]
           }
         }
@@ -175,11 +222,16 @@ OpenClaw manages container lifecycle — containers are removed when sessions en
 
 | Variable | Example | Description |
 |----------|---------|-------------|
+| `ROUTING_MODE` | `traefik` or `cloudflared` | Routing backend (default: `traefik`) |
 | `GITHUB_TOKEN` | `ghp_...` | GitHub PAT for cloning |
 | `DEVBOX_DOMAIN` | `oc.example.com` | Base domain |
 | `APP_TAG_1..5` | `api`, `app`, ... | Route tags |
 | `ENABLE_VNC` | `true` | Enable noVNC |
 | `ENABLE_VSCODE` | `true` | Enable VSCode Web |
+| `CF_TUNNEL_TOKEN` | `eyJ...` | Cloudflare tunnel run token (cloudflared only) |
+| `CF_API_TOKEN` | `abc123` | CF API token for DNS registration (cloudflared only) |
+| `CF_ZONE_ID` | `xyz789` | CF zone ID for the domain (cloudflared only) |
+| `CF_TUNNEL_ID` | `uuid` | CF tunnel ID for CNAME targets (cloudflared only) |
 
 ### Dynamic (built by entrypoint, available in all shells)
 

@@ -10,7 +10,8 @@ Whether you're working from your laptop, a tablet, or someone else's machine —
 
 ## Features
 
-- **Self-registering containers** — auto-assigns ID, writes Traefik routes, builds `APP_URL_*` env vars
+- **Self-registering containers** — auto-assigns ID, configures routing, builds `APP_URL_*` env vars
+- **Flexible routing** — choose between Traefik (self-managed) or Cloudflare Tunnels (zero open ports)
 - **VSCode Web** — browser-based IDE on port 8000
 - **noVNC** — visual desktop access on port 8002
 - **Chromium CDP** — headless browser automation on port 9222
@@ -42,17 +43,19 @@ Whether you're working from your laptop, a tablet, or someone else's machine —
 
 ## Prerequisites
 
-### Traefik Reverse Proxy
+### Routing: Traefik or Cloudflare Tunnels
 
-This skill requires **Traefik** as a reverse proxy. Everything — including OpenClaw itself — must be routed through Traefik so that all services are available on the same domain.
+Devboxes need a way to expose services via URLs. Choose one:
 
-Devbox containers automatically register Traefik routes on startup by writing config files to the Traefik dynamic directory. This is why Traefik is essential — it allows containers to make themselves reachable without any manual configuration.
+#### Option A: Traefik (self-managed reverse proxy)
 
-> **If you haven't set up Traefik yet**, follow the [OpenClaw + Traefik Setup Guide](https://gist.github.com/adshrc/3cd9e8a714098f414635b7fe1ab5e573#file-openclaw_traefik-md). It covers creating the Traefik network, configuration, and routing OpenClaw through Traefik.
+Best for: servers with open ports and an existing Traefik setup.
 
-### OpenClaw Container
+Devbox containers automatically register Traefik routes on startup by writing config files to the Traefik dynamic directory.
 
-Your OpenClaw container needs the Traefik dynamic config directory mounted so devbox containers can write route configs:
+> **If you haven't set up Traefik yet**, follow the [OpenClaw + Traefik Setup Guide](https://gist.github.com/adshrc/3cd9e8a714098f414635b7fe1ab5e573#file-openclaw_traefik-md).
+
+Your OpenClaw container needs the Traefik dynamic config directory mounted:
 
 ```bash
 docker run -d \
@@ -67,12 +70,21 @@ docker run -d \
   node openclaw.mjs gateway --allow-unconfigured --bind lan
 ```
 
-Compared to the [base Traefik setup](https://gist.github.com/adshrc/3cd9e8a714098f414635b7fe1ab5e573#file-openclaw_traefik-md), one mount is added:
-- **`$HOME/traefik/dynamic:/etc/traefik/dynamic`** — so the agent and devbox containers can write Traefik route configs
+#### Option B: Cloudflare Tunnels (zero open ports)
+
+Best for: environments without a reverse proxy, behind NAT, or where you don't want to expose ports.
+
+Each devbox starts `cloudflared` internally and registers DNS records via the Cloudflare API. All traffic is routed through Cloudflare's network — no open ports or Traefik needed.
+
+Requirements:
+- A **Cloudflare account** with a domain managed by Cloudflare
+- A **Cloudflare API token** with Zone:DNS:Edit and Account:Tunnel:Edit permissions
+
+The agent handles tunnel creation and configuration during onboarding.
 
 ### Wildcard DNS
 
-You need a wildcard DNS record (`*.your-domain.com`) pointing to your server so that devbox subdomains (e.g. `vscode-1.your-domain.com`, `api-1.your-domain.com`) resolve automatically.
+You need a wildcard DNS record (`*.your-domain.com`) pointing to your server (Traefik mode) or Cloudflare handles DNS automatically (Cloudflare Tunnel mode).
 
 ## Quick Start
 
@@ -152,7 +164,12 @@ See [setup-script-guide.md](references/setup-script-guide.md) for full conventio
 | `APP_PORT_1..5` | Dockerfile | Internal ports (8003-8007) |
 | `APP_TAG_1..5` | config | Route tags |
 | `DEVBOX_DOMAIN` | config | Base domain |
+| `ROUTING_MODE` | config | `traefik` (default) or `cloudflared` |
 | `GITHUB_TOKEN` | config | GitHub PAT |
+| `CF_TUNNEL_TOKEN` | config | Cloudflare tunnel token (cloudflared only) |
+| `CF_API_TOKEN` | config | CF API token for DNS (cloudflared only) |
+| `CF_ZONE_ID` | config | CF zone ID (cloudflared only) |
+| `CF_TUNNEL_ID` | config | CF tunnel ID (cloudflared only) |
 | `VSCODE_URL` | entrypoint | VSCode Web URL |
 | `NOVNC_URL` | entrypoint | noVNC URL |
 
