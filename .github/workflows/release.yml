@@ -105,5 +105,5 @@ jobs:
             --slug openclaw-devboxes \
             --version ${{ needs.release.outputs.new-release-version }} \
             --changelog "Release v${{ needs.release.outputs.new-release-version }}" \
-            --tags latest,v${{ needs.release.outputs.new-release-version }} \
+            --tags latest,${{ needs.release.outputs.new-release-version }} \
             --no-input
