@@ -52,7 +52,7 @@ Devbox containers automatically register Traefik routes on startup by writing co
 
 ### OpenClaw Container
 
-Your OpenClaw container needs access to the Docker socket so it can spawn sandbox containers. Make sure `/var/run/docker.sock` is mounted:
+Your OpenClaw container needs the Traefik dynamic config directory mounted so devbox containers can write route configs:
 
 ```bash
 docker run -d \
@@ -61,15 +61,13 @@ docker run -d \
   --restart unless-stopped \
   -v $HOME/openclaw:/home/node/.openclaw \
   -v $HOME/openclaw/workspace:/home/node/.openclaw/workspace \
-  -v /var/run/docker.sock:/var/run/docker.sock \
   -v $HOME/traefik/dynamic:/etc/traefik/dynamic \
   -e OPENCLAW_GATEWAY_TOKEN=$OPENCLAW_GATEWAY_TOKEN \
   ghcr.io/openclaw/openclaw:latest \
   node openclaw.mjs gateway --allow-unconfigured --bind lan
 ```
 
-Compared to the [base Traefik setup](https://gist.github.com/adshrc/3cd9e8a714098f414635b7fe1ab5e573#file-openclaw_traefik-md), two mounts are added:
-- **`/var/run/docker.sock`** — required for any OpenClaw sandbox/skill that spawns containers
+Compared to the [base Traefik setup](https://gist.github.com/adshrc/3cd9e8a714098f414635b7fe1ab5e573#file-openclaw_traefik-md), one mount is added:
 - **`$HOME/traefik/dynamic:/etc/traefik/dynamic`** — so the agent and devbox containers can write Traefik route configs
 
 ### Wildcard DNS

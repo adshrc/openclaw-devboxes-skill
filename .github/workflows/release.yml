@@ -79,3 +79,31 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: ${{ needs.release.outputs.new-release-version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+  publish-clawhub:
+    needs: release
+    runs-on: ubuntu-latest
+    if: ${{ needs.release.outputs.new-release-published == 'true' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ClawHub CLI
+        run: npm i -g clawhub
+
+      - name: Login to ClawHub
+        run: clawhub login --token ${{ secrets.CLAWHUB_TOKEN }} --no-browser
+
+      - name: Publish to ClawHub
+        run: |
+          clawhub publish . \
+            --slug openclaw-devboxes \
+            --version ${{ needs.release.outputs.new-release-version }} \
+            --changelog "Release v${{ needs.release.outputs.new-release-version }}" \
+            --tags latest,${{ needs.release.outputs.new-release-version }} \
+            --no-input

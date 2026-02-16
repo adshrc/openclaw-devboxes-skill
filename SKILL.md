@@ -65,20 +65,9 @@ Ask the user for:
 ### Step 2: Verify prerequisites
 
 ```bash
-# Docker access
-docker info > /dev/null 2>&1
-
-# Traefik network exists
-docker network ls | grep traefik
-
 # Check that /etc/traefik/dynamic is mounted
 ls /etc/traefik/dynamic
-
-# Pull the image (NOT build)
-docker pull ghcr.io/adshrc/openclaw-devbox:latest
 ```
-
-If Traefik network doesn't exist: `docker network create traefik`
 
 If `/etc/traefik/dynamic` doesn't exist, tell the user they need to add `-v $HOME/traefik/dynamic:/etc/traefik/dynamic` to their OpenClaw container and restart it.
 
