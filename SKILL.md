@@ -7,7 +7,7 @@ description: Manage development environment containers (devboxes) with web-acces
 
 Devboxes are OpenClaw sandbox containers running a custom image with VSCode Web, noVNC, Chromium (CDP), and up to 5 app ports routed via Traefik.
 
-OpenClaw manages the full container lifecycle. Containers **self-register** — the entrypoint auto-assigns an ID, writes Traefik routes, and builds `APP_URL_*` env vars. The main agent just spawns and reports URLs.
+OpenClaw manages the full container lifecycle natively — no Docker socket, Docker binary, or `--privileged` flag needed on the OpenClaw container. The gateway talks to Docker directly. Containers **self-register** — the entrypoint auto-assigns an ID, writes Traefik routes, and builds `APP_URL_*` env vars. The main agent just spawns and reports URLs.
 
 ## File Locations
 
@@ -40,7 +40,7 @@ The container's entrypoint automatically:
 | `scripts/.devbox-counter` | `/shared/.devbox-counter` | ID counter |
 | `/etc/traefik/dynamic` | `/traefik` | Route configs |
 
-**Important:** Both paths must be world-writable (`chmod 666` / `chmod 777`) because sandbox containers run with `CapDrop: ALL`.
+**Important:** Both paths must be world-writable (`chmod 666` / `chmod 777`) because sandbox containers run with `CapDrop: ALL` (no Linux capabilities). Docker is not available inside devbox containers — OpenClaw manages the container lifecycle from the gateway.
 
 ### Known Paths
 
@@ -64,23 +64,16 @@ Ask the user for:
 
 ### Step 2: Verify prerequisites
 
+OpenClaw manages Docker natively — the OpenClaw container does **not** need docker.sock, the docker binary, or `--privileged`. The gateway handles all container operations internally.
+
 ```bash
-# Docker access
-docker info > /dev/null 2>&1
-
-# Traefik network exists
-docker network ls | grep traefik
-
 # Check that /etc/traefik/dynamic is mounted
 ls /etc/traefik/dynamic
-
-# Pull the image (NOT build)
-docker pull ghcr.io/adshrc/openclaw-devbox:latest
 ```
 
-If Traefik network doesn't exist: `docker network create traefik`
-
 If `/etc/traefik/dynamic` doesn't exist, tell the user they need to add `-v $HOME/traefik/dynamic:/etc/traefik/dynamic` to their OpenClaw container and restart it.
+
+The Traefik network and image pull are handled automatically by OpenClaw when spawning the first sandbox.
 
 ### Step 3: Create counter file
 
