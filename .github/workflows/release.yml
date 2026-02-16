@@ -103,8 +103,7 @@ jobs:
         run: |
           clawhub publish . \
             --slug openclaw-devboxes \
-            --name "OpenClaw Devboxes" \
             --version ${{ needs.release.outputs.new-release-version }} \
             --changelog "Release v${{ needs.release.outputs.new-release-version }}" \
-            --tags latest \
+            --tags latest,v${{ needs.release.outputs.new-release-version }} \
             --no-input
