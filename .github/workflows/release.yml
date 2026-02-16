@@ -99,10 +99,13 @@ jobs:
       - name: Login to ClawHub
         run: clawhub login --token ${{ secrets.CLAWHUB_TOKEN }} --no-browser
 
+      - name: Wait for rate limit
+        run: sleep 5
+
       - name: Publish to ClawHub
         run: |
           clawhub publish . \
-            --slug openclaw-devboxes \
+            --slug devboxes \
             --version ${{ needs.release.outputs.new-release-version }} \
             --changelog "Release v${{ needs.release.outputs.new-release-version }}" \
             --tags latest,${{ needs.release.outputs.new-release-version }} \
