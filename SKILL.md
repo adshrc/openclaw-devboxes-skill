@@ -41,7 +41,7 @@ The container's entrypoint automatically:
 | Agent path                             | Devbox container path     | Purpose       |
 | -------------------------------------- | ------------------------- | ------------- |
 | `/home/node/.openclaw/.devbox-counter` | `/shared/.devbox-counter` | ID counter    |
-| `/home/node/.openclaw/traefik/configs` | `/traefik`                | Route configs |
+| `/home/node/.openclaw/traefik`         | `/traefik`                | Route configs |
 
 **Important:** Both paths must be writable by the sandbox containers (UID 1000). The counter file needs `chmod 666`, and the Traefik devboxes dir should be owned by `1000:1000` (set up during host provisioning).
 
@@ -50,7 +50,7 @@ The container's entrypoint automatically:
 These paths are always the same inside the OpenClaw container:
 
 - **OpenClaw data:** `/home/node/.openclaw`
-- **Traefik dynamic config:** `/home/node/.openclaw/traefik/configs` (must be mounted into the OpenClaw container; only if using Traefik routing)
+- **Traefik dynamic config:** `/home/node/.openclaw/traefik` (must be mounted into the OpenClaw container; only if using Traefik routing)
 
 ## Onboarding Flow
 
@@ -95,11 +95,11 @@ If **Cloudflare Tunnel** is chosen, also ask for:
 #### If routing mode is Traefik:
 
 ```bash
-# Check that /home/node/.openclaw/traefik/configs is mounted
-ls /home/node/.openclaw/traefik/configs
+# Check that /home/node/.openclaw/traefik is mounted
+ls /home/node/.openclaw/traefik
 ```
 
-If `/home/node/.openclaw/traefik/configs` doesn't exist, tell the user they need to add `-v $HOME/traefik/configs:/home/node/.openclaw/traefik/configs` to their OpenClaw container and restart it.
+If `/home/node/.openclaw/traefik` doesn't exist, tell the user they need to add `-v $HOME/openclaw/traefik:/home/node/.openclaw/traefik` to their OpenClaw container and restart it.
 
 #### If routing mode is Cloudflare Tunnel:
 
@@ -138,8 +138,8 @@ Store the values: `CF_API_TOKEN`, `CF_ZONE_ID`, `CF_ACCOUNT_ID`, `CF_TUNNEL_ID`,
 ### Step 3: Create counter file
 
 ```bash
-echo "0" > $HOME/.openclaw/.devbox-counter
-chmod 666 $HOME/.openclaw/.devbox-counter
+echo "0" > /home/node/.openclaw/.devbox-counter
+chmod 666 /home/node/.openclaw/.devbox-counter
 ```
 
 ### Step 4: Configure OpenClaw
@@ -185,9 +185,21 @@ node /app/openclaw.mjs config set agents.list[{index}] '{
 
 ### Devbox Agent
 
-Now add the devbox agent at the next index in agents.list.
+1. Pull the Docker image so that it's available when OpenClaw tries to spawn it:
 
-Adjust the sandbox and docker config as needed (replace placeholders in curly braces):
+```bash
+docker pull ghcr.io/adshrc/openclaw-devbox:latest
+```
+
+2. Find out what the host path/mapping is for `/home/node/.openclaw` inside the container:
+
+```bash
+docker inspect $(hostname)
+```
+
+Look for the `Mounts` section and find the source path that maps to `/home/node/.openclaw` in the container. Store the value as `HOST_OPENCLAW_PATH`.
+
+3. Now add the devbox agent at the next index in agents.list. Adjust the sandbox and docker config as needed (replace placeholders in curly braces):
 
 ```bash
 node /app/openclaw.mjs config set agents.list[{index}] '{
@@ -219,8 +231,8 @@ node /app/openclaw.mjs config set agents.list[{index}] '{
           "CF_TUNNEL_ID": "{cf_tunnel_id}",
         },
         "binds": [
-          "/home/node/.openclaw/.devbox-counter:/shared/.devbox-counter:rw",
-          "/home/node/.openclaw/traefik/configs:/traefik:rw" # Only needed for Traefik routing mode, exclude otherwise
+          "{host_openclaw_path}/.devbox-counter:/shared/.devbox-counter:rw",
+          "{host_openclaw_path}/traefik:/traefik:rw" # Only needed for Traefik routing mode, exclude otherwise
         ]
       },
       "browser": {
@@ -232,7 +244,7 @@ node /app/openclaw.mjs config set agents.list[{index}] '{
 ]' --json
 ```
 
-The Gateway will restart automatically, a restart is not needed!
+After this is done, restart the gateway to apply the changes. If this is not working (e.g. command is disabled), ask the user to restart the OpenClaw container manually.
 
 ## Workflow: Spawn a Devbox
 
