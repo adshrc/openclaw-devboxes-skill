@@ -40,7 +40,7 @@ The container's entrypoint automatically:
 | Agent path | Devbox container path | Purpose |
 |-----------|----------------------|---------|
 | `scripts/.devbox-counter` | `/shared/.devbox-counter` | ID counter |
-| `/etc/traefik/dynamic` | `/traefik` | Route configs |
+| `/etc/traefik/devboxes` | `/traefik` | Route configs |
 
 **Important:** Both paths must be world-writable (`chmod 666` / `chmod 777`) because sandbox containers run with `CapDrop: ALL`.
 
@@ -48,9 +48,9 @@ The container's entrypoint automatically:
 
 These paths are always the same inside the OpenClaw container:
 - **OpenClaw data:** `/home/node/.openclaw`
-- **Traefik dynamic config:** `/etc/traefik/dynamic` (must be mounted into the OpenClaw container)
+- **Traefik dynamic config:** `/etc/traefik/devboxes` (must be mounted into the OpenClaw container)
 
-If `/etc/traefik/dynamic` is not available, it means the OpenClaw container doesn't have it mounted — the user needs to add `-v $HOME/traefik/dynamic:/etc/traefik/dynamic` to their OpenClaw `docker run` command and restart.
+If `/etc/traefik/devboxes` is not available, it means the OpenClaw container doesn't have it mounted — the user needs to add `-v $HOME/traefik/devboxes:/etc/traefik/devboxes` to their OpenClaw `docker run` command and restart.
 
 ## Onboarding Flow
 
@@ -73,11 +73,11 @@ If **Cloudflare Tunnel** is chosen, also ask for:
 #### If routing mode is Traefik:
 
 ```bash
-# Check that /etc/traefik/dynamic is mounted
-ls /etc/traefik/dynamic
+# Check that /etc/traefik/devboxes is mounted
+ls /etc/traefik/devboxes
 ```
 
-If `/etc/traefik/dynamic` doesn't exist, tell the user they need to add `-v $HOME/traefik/dynamic:/etc/traefik/dynamic` to their OpenClaw container and restart it.
+If `/etc/traefik/devboxes` doesn't exist, tell the user they need to add `-v $HOME/traefik/devboxes:/etc/traefik/devboxes` to their OpenClaw container and restart it.
 
 #### If routing mode is Cloudflare Tunnel:
 
@@ -121,13 +121,7 @@ echo "0" > scripts/.devbox-counter
 chmod 666 scripts/.devbox-counter
 ```
 
-### Step 4: Ensure Traefik dynamic dir is writable
-
-```bash
-chmod 777 /etc/traefik/dynamic
-```
-
-### Step 5: Configure OpenClaw
+### Step 4: Configure OpenClaw
 
 Use `openclaw config set` to add the devbox agent. This is the **correct** way — do NOT manually edit openclaw.json or use `gateway config.apply`.
 
@@ -179,7 +173,7 @@ openclaw config set agents.list[1].sandbox.docker.env.GITHUB_TOKEN "{github_toke
 # openclaw config set agents.list[1].sandbox.docker.env.CF_TUNNEL_ID "{tunnel_id}"
 
 # Set bind mounts
-openclaw config set agents.list[1].sandbox.docker.binds '["SKILL_DIR/scripts/.devbox-counter:/shared/.devbox-counter:rw", "/etc/traefik/dynamic:/traefik:rw"]' --json
+openclaw config set agents.list[1].sandbox.docker.binds '["SKILL_DIR/scripts/.devbox-counter:/shared/.devbox-counter:rw", "/etc/traefik/devboxes:/traefik:rw"]' --json
 # For cloudflared mode, omit the traefik bind
 ```
 
