@@ -60,6 +60,8 @@ chmod 666 /var/run/docker.sock
 
 > **Note:** This must be done on the host machine before starting the OpenClaw container. If the container is already running, restart it after adding the volume mounts (e.g. docker-compose.yml)
 
+> **Important:** The host path mapped to `/home/node/.openclaw` inside the OpenClaw container must **not** be a system directory (e.g. `/etc`, `/proc`, `/sys`, `/dev`, `/root`, `/boot`, `/run`, `/var/run`). Use a dedicated path like `/home/openclaw` or `/opt/openclaw` instead.
+
 ### 2. Routing: Traefik or Cloudflare Tunnels
 
 Devboxes need a way to expose services via URLs. Choose one:
@@ -159,10 +161,18 @@ Each container's entrypoint automatically:
 
 1. Reads and increments the shared counter → assigns `DEVBOX_ID`
 2. Builds `APP_URL_1..5`, `VSCODE_URL`, `NOVNC_URL` from tags + domain + ID
-3. Writes env vars to `/etc/profile.d/devbox.sh` (available in all shells)
-4. Writes Traefik config to `/traefik/devbox-{id}.yml`
+3. Writes env vars to `/etc/devbox.env` and `/etc/profile.d/devbox.sh` (available in all shells)
+4. Routes based on `ROUTING_MODE`:
+   - **Traefik** (default): Writes config to `/traefik/devbox-{id}.yml`
+   - **Cloudflare Tunnel**: Generates cloudflared ingress config, registers DNS CNAME records via CF API, starts `cloudflared tunnel run`
 
 No manual routing or ID assignment needed.
+
+The devbox working directory is `/workspace`. Cloned repos should live under `/workspace/<repo>`.
+
+## Cleanup
+
+OpenClaw manages the container lifecycle — containers are removed when sessions end. Traefik route configs left behind are harmless.
 
 ## Project Setup Scripts
 
@@ -228,6 +238,7 @@ The devbox agent has browser access via Chromium CDP on port 9222. The subagent 
 ## Important Notes
 
 - Sandbox containers run with **all Linux capabilities dropped** (`CapDrop: ALL`). Bind-mounted files/dirs must be world-writable.
+- The devbox working directory is always `/workspace`.
 
 ## License
 

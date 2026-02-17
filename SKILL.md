@@ -159,6 +159,8 @@ echo "0" > /home/node/.openclaw/.devbox-counter
 chmod 666 /home/node/.openclaw/.devbox-counter
 ```
 
+**Important:** The counter is never reset, it just keeps incrementing.
+
 ### Step 6: Configure OpenClaw
 
 First, check the current "agents" config:
@@ -208,7 +210,7 @@ node /app/openclaw.mjs config set agents.list[{index}] '{
 docker pull ghcr.io/adshrc/openclaw-devbox:latest
 ```
 
-2. Now add the devbox agent at the next index in agents.list. Adjust the sandbox and docker config as needed (replace placeholders in curly braces):
+2. Add the devbox agent at the next index in agents.list. Adjust the sandbox and docker config as needed (replace placeholders in curly brackets):
 
 ```bash
 node /app/openclaw.mjs config set agents.list[{index}] '{
@@ -247,10 +249,21 @@ node /app/openclaw.mjs config set agents.list[{index}] '{
       "browser": {
         "enabled": true,
         "cdpPort": 9222
+      },
+      "prune": {
+        "idleHours": 0,
+        "maxAgeDays": 0
       }
     }
   }
 ]' --json
+```
+
+3. Allow Agents to communicate with each other so that subsequent tasks can be sent to the devbox agent:
+
+```bash
+node /app/openclaw.mjs config set tools.agentToAgent.enabled true
+node /app/openclaw.mjs config set tools.sessions.visibility "all"
 ```
 
 After this is done, restart the gateway to apply the changes. If this is not working (e.g. command is disabled), ask the user to restart the OpenClaw container manually.
@@ -263,7 +276,7 @@ After this is done, restart the gateway to apply the changes. If this is not wor
 sessions_spawn(
     agentId="devbox",
     label="devbox-{task_name}",
-    task="Your task description. GitHub token is in $GITHUB_TOKEN. Env vars (DEVBOX_ID, APP_URL_*, etc.) are in your shell via `source /etc/profile.d/devbox.sh`."
+    task="Your task description. GitHub token is in $GITHUB_TOKEN. Env vars (DEVBOX_ID, APP_URL_*, etc.) are in your shell via `source /etc/profile.d/devbox.sh`. ALWAYS use /workspace as the working directory! When cloning, the structure must be /workspace/<repo>."
 )
 ```
 
