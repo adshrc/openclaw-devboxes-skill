@@ -40,7 +40,7 @@ The container's entrypoint automatically:
 | Agent path | Devbox container path | Purpose |
 |-----------|----------------------|---------|
 | `scripts/.devbox-counter` | `/shared/.devbox-counter` | ID counter |
-| `/etc/traefik/dynamic` | `/traefik` | Route configs |
+| `/etc/traefik/devboxes` | `/traefik` | Route configs |
 
 **Important:** Both paths must be world-writable (`chmod 666` / `chmod 777`) because sandbox containers run with `CapDrop: ALL`.
 
@@ -48,9 +48,9 @@ The container's entrypoint automatically:
 
 These paths are always the same inside the OpenClaw container:
 - **OpenClaw data:** `/home/node/.openclaw`
-- **Traefik dynamic config:** `/etc/traefik/dynamic` (must be mounted into the OpenClaw container)
+- **Traefik dynamic config:** `/etc/traefik/devboxes` (must be mounted into the OpenClaw container)
 
-If `/etc/traefik/dynamic` is not available, it means the OpenClaw container doesn't have it mounted — the user needs to add `-v $HOME/traefik/dynamic:/etc/traefik/dynamic` to their OpenClaw `docker run` command and restart.
+If `/etc/traefik/devboxes` is not available, it means the OpenClaw container doesn't have it mounted — the user needs to add `-v $HOME/traefik/devboxes:/etc/traefik/devboxes` to their OpenClaw `docker run` command and restart.
 
 ## Onboarding Flow
 
@@ -73,11 +73,11 @@ If **Cloudflare Tunnel** is chosen, also ask for:
 #### If routing mode is Traefik:
 
 ```bash
-# Check that /etc/traefik/dynamic is mounted
-ls /etc/traefik/dynamic
+# Check that /etc/traefik/devboxes is mounted
+ls /etc/traefik/devboxes
 ```
 
-If `/etc/traefik/dynamic` doesn't exist, tell the user they need to add `-v $HOME/traefik/dynamic:/etc/traefik/dynamic` to their OpenClaw container and restart it.
+If `/etc/traefik/devboxes` doesn't exist, tell the user they need to add `-v $HOME/traefik/devboxes:/etc/traefik/devboxes` to their OpenClaw container and restart it.
 
 #### If routing mode is Cloudflare Tunnel:
 
@@ -124,7 +124,7 @@ chmod 666 scripts/.devbox-counter
 ### Step 4: Ensure Traefik dynamic dir is writable
 
 ```bash
-chmod 777 /etc/traefik/dynamic
+
 ```
 
 ### Step 5: Configure OpenClaw
@@ -155,9 +155,9 @@ The patch should add a devbox agent to the agents list:
             "env": {
               "DEVBOX_DOMAIN": "{domain}",
               "ROUTING_MODE": "{traefik|cloudflared}",
-              "APP_TAG_1": "api",
-              "APP_TAG_2": "app",
-              "APP_TAG_3": "dashboard",
+              "APP_TAG_1": "app1",
+              "APP_TAG_2": "app2",
+              "APP_TAG_3": "app3",
               "APP_TAG_4": "app4",
               "APP_TAG_5": "app5",
               "ENABLE_VNC": "true",
@@ -170,7 +170,7 @@ The patch should add a devbox agent to the agents list:
             },
             "binds": [
               "/home/node/.openclaw/workspace/skills/devbox/scripts/.devbox-counter:/shared/.devbox-counter:rw",
-              "/etc/traefik/dynamic:/traefik:rw (only for traefik mode)"
+              "/etc/traefik/devboxes:/traefik:rw (only for traefik mode)"
             ]
           }
         }
@@ -225,7 +225,7 @@ OpenClaw manages container lifecycle — containers are removed when sessions en
 | `ROUTING_MODE` | `traefik` or `cloudflared` | Routing backend (default: `traefik`) |
 | `GITHUB_TOKEN` | `ghp_...` | GitHub PAT for cloning |
 | `DEVBOX_DOMAIN` | `oc.example.com` | Base domain |
-| `APP_TAG_1..5` | `api`, `app`, ... | Route tags |
+| `APP_TAG_1..5` | `app1`, `app2`, ... | Route tags |
 | `ENABLE_VNC` | `true` | Enable noVNC |
 | `ENABLE_VSCODE` | `true` | Enable VSCode Web |
 | `CF_TUNNEL_TOKEN` | `eyJ...` | Cloudflare tunnel run token (cloudflared only) |
@@ -238,7 +238,7 @@ OpenClaw manages container lifecycle — containers are removed when sessions en
 | Variable | Example | Description |
 |----------|---------|-------------|
 | `DEVBOX_ID` | `1` | Auto-assigned sequential ID |
-| `APP_URL_1..5` | `https://api-1.oc.example.com` | Full URLs per app slot |
+| `APP_URL_1..5` | `https://app1-1.oc.example.com` | Full URLs per app slot |
 | `APP_PORT_1..5` | `8003..8007` | Internal ports |
 | `VSCODE_URL` | `https://vscode-1.oc.example.com` | VSCode Web URL |
 | `NOVNC_URL` | `https://novnc-1.oc.example.com/vnc.html` | noVNC URL |

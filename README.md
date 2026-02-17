@@ -64,7 +64,7 @@ docker run -d \
   --restart unless-stopped \
   -v $HOME/openclaw:/home/node/.openclaw \
   -v $HOME/openclaw/workspace:/home/node/.openclaw/workspace \
-  -v $HOME/traefik/dynamic:/etc/traefik/dynamic \
+  -v $HOME/traefik/devboxes:/etc/traefik/devboxes \
   -e OPENCLAW_GATEWAY_TOKEN=$OPENCLAW_GATEWAY_TOKEN \
   ghcr.io/openclaw/openclaw:latest \
   node openclaw.mjs gateway --allow-unconfigured --bind lan
