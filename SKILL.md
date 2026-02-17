@@ -69,14 +69,14 @@ which docker
 docker version
 ```
 
-If not, abort here and tell the user they need to run the OpenClaw container with
+If not, abort here and tell the user they need to run the OpenClaw container with:
 
 ```
 -v /usr/bin/docker:/usr/bin/docker:ro
 -v /var/run/docker.sock:/var/run/docker.sock
 ```
 
-Also tell the User to set `chmod 666 /var/run/docker.sock` on the host, so that the OpenClaw container can manage sibling containers.
+Also tell the User to set `chmod 666 /var/run/docker.sock` manually on the host, so that the OpenClaw container can work with it.
 
 The OpenClaw container needs to be restarted then. After that, the User can ask to set up the devbox skill again and you can proceed.
 
