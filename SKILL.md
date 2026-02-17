@@ -42,7 +42,7 @@ The container's entrypoint automatically:
 | `scripts/.devbox-counter` | `/shared/.devbox-counter` | ID counter |
 | `/etc/traefik/devboxes` | `/traefik` | Route configs |
 
-**Important:** Both paths must be world-writable (`chmod 666` / `chmod 777`) because sandbox containers run with `CapDrop: ALL`.
+**Important:** Both paths must be writable by the sandbox containers (UID 1000). The counter file needs `chmod 666`, and the Traefik devboxes dir should be owned by `1000:1000` (set up during host provisioning).
 
 ### Known Paths
 
@@ -121,68 +121,76 @@ echo "0" > scripts/.devbox-counter
 chmod 666 scripts/.devbox-counter
 ```
 
-### Step 4: Ensure Traefik dynamic dir is writable
+### Step 4: Configure OpenClaw
+
+Use `openclaw config set` to add the devbox agent. This is the **correct** way — do NOT manually edit openclaw.json or use `gateway config.apply`.
+
+Ref: https://docs.openclaw.ai/cli/config
+
+**⚠️ CRITICAL rules:**
+- `allowAgents` goes on the **main agent entry** in `agents.list[0].subagents`, NOT under `agents.defaults.subagents` (which doesn't support it — causes "Unrecognized key" error).
+- Never replace the entire `agents.list` — that removes the main agent and breaks OpenClaw.
+
+First, check how many agents already exist:
 
 ```bash
-
+openclaw config get agents.list
 ```
 
-### Step 5: Configure OpenClaw
+Find the next available index (e.g. if there's only `[0]` = main, use `[1]` for devbox). Then set each value:
 
-Use `gateway config.patch` to add the devbox agent. This is the **correct** way — do NOT tell the user to manually edit openclaw.json.
+```bash
+# Allow the main agent (index 0) to spawn devbox subagents
+openclaw config set agents.list[0].subagents.allowAgents '["devbox"]' --json
 
-The patch should add a devbox agent to the agents list:
+# Add the devbox agent at the next index (e.g. [1])
+openclaw config set agents.list[1].id "devbox"
+openclaw config set agents.list[1].name "Devbox"
+openclaw config set agents.list[1].sandbox.mode "all"
+openclaw config set agents.list[1].sandbox.workspaceAccess "none"
+openclaw config set agents.list[1].sandbox.scope "session"
+openclaw config set agents.list[1].sandbox.browser.enabled true --json
+openclaw config set agents.list[1].sandbox.browser.cdpPort 9222 --json
+openclaw config set agents.list[1].sandbox.docker.image "ghcr.io/adshrc/openclaw-devbox:latest"
+openclaw config set agents.list[1].sandbox.docker.readOnlyRoot false --json
+openclaw config set agents.list[1].sandbox.docker.network "traefik"
 
-```json
-{
-  "agents": {
-    "list": [
-      {
-        "id": "devbox",
-        "name": "Devbox",
-        "sandbox": {
-          "mode": "all",
-          "workspaceAccess": "none",
-          "scope": "session",
-          "browser": {
-            "enabled": true,
-            "cdpPort": 9222
-          },
-          "docker": {
-            "image": "ghcr.io/adshrc/openclaw-devbox:latest",
-            "readOnlyRoot": false,
-            "network": "traefik",
-            "env": {
-              "DEVBOX_DOMAIN": "{domain}",
-              "ROUTING_MODE": "{traefik|cloudflared}",
-              "APP_TAG_1": "app1",
-              "APP_TAG_2": "app2",
-              "APP_TAG_3": "app3",
-              "APP_TAG_4": "app4",
-              "APP_TAG_5": "app5",
-              "ENABLE_VNC": "true",
-              "ENABLE_VSCODE": "true",
-              "GITHUB_TOKEN": "{github_token}",
-              "CF_TUNNEL_TOKEN": "{cf_tunnel_token (only for cloudflared)}",
-              "CF_API_TOKEN": "{cf_api_token (only for cloudflared)}",
-              "CF_ZONE_ID": "{cf_zone_id (only for cloudflared)}",
-              "CF_TUNNEL_ID": "{cf_tunnel_id (only for cloudflared)}"
-            },
-            "binds": [
-              "/home/node/.openclaw/workspace/skills/devbox/scripts/.devbox-counter:/shared/.devbox-counter:rw",
-              "/etc/traefik/devboxes:/traefik:rw (only for traefik mode)"
-            ]
-          }
-        }
-      }
-    ]
-  }
-}
+# Set env vars (replace placeholders with actual values)
+openclaw config set agents.list[1].sandbox.docker.env.DEVBOX_DOMAIN "{domain}"
+openclaw config set agents.list[1].sandbox.docker.env.ROUTING_MODE "{traefik|cloudflared}"
+openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_1 "app1"
+openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_2 "app2"
+openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_3 "app3"
+openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_4 "app4"
+openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_5 "app5"
+openclaw config set agents.list[1].sandbox.docker.env.ENABLE_VNC "true"
+openclaw config set agents.list[1].sandbox.docker.env.ENABLE_VSCODE "true"
+openclaw config set agents.list[1].sandbox.docker.env.GITHUB_TOKEN "{github_token}"
+# For cloudflared mode only:
+# openclaw config set agents.list[1].sandbox.docker.env.CF_TUNNEL_TOKEN "{token}"
+# openclaw config set agents.list[1].sandbox.docker.env.CF_API_TOKEN "{token}"
+# openclaw config set agents.list[1].sandbox.docker.env.CF_ZONE_ID "{zone_id}"
+# openclaw config set agents.list[1].sandbox.docker.env.CF_TUNNEL_ID "{tunnel_id}"
+
+# Set bind mounts
+openclaw config set agents.list[1].sandbox.docker.binds '["SKILL_DIR/scripts/.devbox-counter:/shared/.devbox-counter:rw", "/etc/traefik/devboxes:/traefik:rw"]' --json
+# For cloudflared mode, omit the traefik bind
 ```
 
-**Important:** When patching, you need to read the current config first (`gateway config.get`), then merge the devbox agent into the existing `agents.list` array, and also ensure the main agent has `subagents: { allowAgents: ["devbox"] }`. Then apply with `gateway config.apply`.
+Replace `SKILL_DIR` with the absolute path to this skill's directory (resolve from the location of this SKILL.md).
 
-### Step 6: Test
+After all values are set, restart the gateway:
+
+```bash
+openclaw gateway restart
+```
+
+**Common mistakes to avoid:**
+- ❌ Putting `allowAgents` under `agents.defaults.subagents` — causes "Unrecognized key" error
+- ❌ Replacing the entire `agents.list` — removes the main agent, breaking OpenClaw
+- ❌ Using `gateway config.apply` or `config.patch` with the full agents list — risky, use `openclaw config set` with specific paths instead
+
+### Step 5: Test
 
 After the gateway restarts, spawn a test devbox to verify self-registration and URLs work.
 
