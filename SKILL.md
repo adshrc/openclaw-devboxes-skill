@@ -111,7 +111,7 @@ If **Cloudflare Tunnel** is chosen, also ask for:
 ls /home/node/.openclaw/traefik
 ```
 
-If `/home/node/.openclaw/traefik` doesn't exist, tell the user they need to add e.g. `-v $HOME/openclaw/traefik:/home/node/.openclaw/traefik` to their OpenClaw container and restart it.
+If `/home/node/.openclaw/traefik` doesn't exist, tell the user they need to add e.g. `-v path_to_traefik:/home/node/.openclaw/traefik` to their OpenClaw container and restart it.
 
 #### If routing mode is Cloudflare Tunnel:
 

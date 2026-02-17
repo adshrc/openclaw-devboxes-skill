@@ -72,10 +72,10 @@ Best for: servers with an existing Traefik setup.
 
 Devbox containers automatically register Traefik routes on startup by writing config files to the Traefik config directory.
 
-Your OpenClaw container needs the Traefik config directory mounted. Start your OpenClaw container with this additional flag:
+Your OpenClaw container needs the Traefik config directory mounted. Start your OpenClaw container with this additional flag (if not within /home/openclaw):
 
 ```bash
--v $HOME/traefik/configs:/home/node/.openclaw/traefik/configs
+-v path_to_traefik:/home/node/.openclaw/traefik
 ```
 
 Make sure that you have a wildcard DNS record (`*.example.com`) pointing to your server.
@@ -115,7 +115,7 @@ git clone https://github.com/adshrc/openclaw-devboxes-skill
 then copy the `SKILL.md` and `references/` directories into your OpenClaw workspace:
 
 ```
-$HOME/openclaw/workspace/skills/devboxes/
+/home/node/.openclaw/workspace/skills/devboxes/
 ├── SKILL.md
 └── references/
     └── setup-script-guide.md
