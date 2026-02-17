@@ -54,6 +54,8 @@ These paths are always the same inside the OpenClaw container:
 
 ## Onboarding Flow
 
+**Important:** After this skill is installed, the next step must be this onboarding flow. The user CANNOT use the devbox skill until the onboarding flow is completed and the infrastructure is set up.
+
 **This runs on the MAIN agent, NOT in a sandbox.** The main agent has access to `exec`, `gateway`, and the file system.
 
 When the user asks to set up the devbox skill, do the following:
@@ -83,10 +85,13 @@ The OpenClaw container needs to be restarted then. After that, they can ask to s
 Find out what the host path/mapping is for `/home/node/.openclaw` inside the container:
 
 ```bash
+# Returns the host path that is mapped to /home/node/.openclaw inside the container
 docker inspect --format='{{range .Mounts}}{{if eq .Destination "/home/node/.openclaw"}}{{.Source}}{{end}}{{end}}' $(hostname)
 ```
 
-Store the value as `HOST_OPENCLAW_PATH`. If `HOST_OPENCLAW_PATH` is a "system directory", OpenClaw will not be able to spawn a devbox. It will throw this error: "Mounting system directories (or Docker socket paths) into sandbox containers is not allowed. Use project-specific paths instead.".
+Store the value as `HOST_OPENCLAW_PATH`. If `HOST_OPENCLAW_PATH` is a "system directory", OpenClaw will not be able to spawn a devbox.
+
+System directories are: /etc, /private/etc, /proc, /sys, /dev, /root, /boot, /run, /var/run, /private/var/run, /var/run/docker.sock, /private/var/run/docker.sock and /run/docker.sock.
 
 If the `HOST_OPENCLAW_PATH` is such a "system directory", abort here and tell the user they need to change their OpenClaw container setup to use a host path for OpenClaw data that is not a system directory. For example, they can create a directory like `/home/openclaw` or `/opt/openclaw` on the host.
 
