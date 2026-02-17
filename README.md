@@ -77,6 +77,7 @@ Best for: environments without a reverse proxy, behind NAT, or where you don't w
 Each devbox starts `cloudflared` internally and registers DNS records via the Cloudflare API. All traffic is routed through Cloudflare's network — no open ports or Traefik needed.
 
 Requirements:
+
 - A **Cloudflare account** with a domain managed by Cloudflare
 - A **Cloudflare API token** with Zone:DNS:Edit and Account:Tunnel:Edit permissions
 
@@ -90,14 +91,11 @@ You need a wildcard DNS record (`*.your-domain.com`) pointing to your server (Tr
 
 ### 1. Install the skill
 
-Copy the `SKILL.md`, `scripts/`, and `references/` directories into your OpenClaw workspace:
+Copy the `SKILL.md` and `references/` directories into your OpenClaw workspace:
 
 ```
 $HOME/openclaw/workspace/skills/devboxes/
 ├── SKILL.md
-├── scripts/
-│   ├── Dockerfile
-│   └── entrypoint.sh
 └── references/
     └── setup-script-guide.md
 ```
@@ -109,6 +107,7 @@ Once the skill files are in place, simply ask your OpenClaw agent:
 > "Set up the devboxes skill"
 
 The agent will read the skill's onboarding instructions and handle everything:
+
 - Pull the Docker image
 - Create the Traefik network (if needed)
 - Set up the counter file and permissions
@@ -157,21 +156,21 @@ See [setup-script-guide.md](references/setup-script-guide.md) for full conventio
 
 ## Environment Variables
 
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `DEVBOX_ID` | entrypoint | Auto-assigned sequential ID |
-| `APP_URL_1..5` | entrypoint | Full external URLs |
-| `APP_PORT_1..5` | Dockerfile | Internal ports (8003-8007) |
-| `APP_TAG_1..5` | config | Route tags |
-| `DEVBOX_DOMAIN` | config | Base domain |
-| `ROUTING_MODE` | config | `traefik` (default) or `cloudflared` |
-| `GITHUB_TOKEN` | config | GitHub PAT |
-| `CF_TUNNEL_TOKEN` | config | Cloudflare tunnel token (cloudflared only) |
-| `CF_API_TOKEN` | config | CF API token for DNS (cloudflared only) |
-| `CF_ZONE_ID` | config | CF zone ID (cloudflared only) |
-| `CF_TUNNEL_ID` | config | CF tunnel ID (cloudflared only) |
-| `VSCODE_URL` | entrypoint | VSCode Web URL |
-| `NOVNC_URL` | entrypoint | noVNC URL |
+| Variable          | Source     | Description                                |
+| ----------------- | ---------- | ------------------------------------------ |
+| `DEVBOX_ID`       | entrypoint | Auto-assigned sequential ID                |
+| `APP_URL_1..5`    | entrypoint | Full external URLs                         |
+| `APP_PORT_1..5`   | Dockerfile | Internal ports (8003-8007)                 |
+| `APP_TAG_1..5`    | config     | Route tags                                 |
+| `DEVBOX_DOMAIN`   | config     | Base domain                                |
+| `ROUTING_MODE`    | config     | `traefik` (default) or `cloudflared`       |
+| `GITHUB_TOKEN`    | config     | GitHub PAT                                 |
+| `CF_TUNNEL_TOKEN` | config     | Cloudflare tunnel token (cloudflared only) |
+| `CF_API_TOKEN`    | config     | CF API token for DNS (cloudflared only)    |
+| `CF_ZONE_ID`      | config     | CF zone ID (cloudflared only)              |
+| `CF_TUNNEL_ID`    | config     | CF tunnel ID (cloudflared only)            |
+| `VSCODE_URL`      | entrypoint | VSCode Web URL                             |
+| `NOVNC_URL`       | entrypoint | noVNC URL                                  |
 
 ## Important Notes
 

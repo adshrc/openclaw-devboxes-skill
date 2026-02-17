@@ -11,11 +11,13 @@ OpenClaw manages the full container lifecycle. Containers **self-register** — 
 
 ## File Locations
 
-All scripts live in the skill's `scripts/` directory. Resolve paths relative to this SKILL.md's parent directory.
+Resolve paths relative to this SKILL.md's parent directory.
 
 Key files:
-- `scripts/Dockerfile` + `scripts/entrypoint.sh` — devbox image (published as `ghcr.io/adshrc/openclaw-devbox:latest`)
-- `scripts/.devbox-counter` — sequential ID counter (created by onboarding, bind-mounted as `/shared/.devbox-counter` inside devbox containers)
+
+- `docker/Dockerfile` + `docker/entrypoint.sh` — devbox image (published as `ghcr.io/adshrc/openclaw-devbox:latest`, no need to build locally)
+- `.devbox-counter` — sequential ID counter (created by onboarding, bind-mounted as `/shared/.devbox-counter` inside devbox containers)
+- `references/setup-script-guide.md` — conventions for project setup scripts (`.openclaw/setup.sh`)
 
 ## Architecture
 
@@ -28,6 +30,7 @@ Key files:
 ### Self-Registration (entrypoint)
 
 The container's entrypoint automatically:
+
 1. Reads and increments `/shared/.devbox-counter` → assigns `DEVBOX_ID`
 2. Builds `APP_URL_1..5`, `VSCODE_URL`, `NOVNC_URL` from tags + domain + ID
 3. Writes `/etc/devbox.env` and `/etc/profile.d/devbox.sh` (available in all shells)
@@ -37,20 +40,19 @@ The container's entrypoint automatically:
 
 ### Bind Mounts (configured in openclaw.json)
 
-| Agent path | Devbox container path | Purpose |
-|-----------|----------------------|---------|
-| `scripts/.devbox-counter` | `/shared/.devbox-counter` | ID counter |
-| `/etc/traefik/devboxes` | `/traefik` | Route configs |
+| Agent path              | Devbox container path     | Purpose       |
+| ----------------------- | ------------------------- | ------------- |
+| `.devbox-counter`       | `/shared/.devbox-counter` | ID counter    |
+| `/etc/traefik/devboxes` | `/traefik`                | Route configs |
 
 **Important:** Both paths must be writable by the sandbox containers (UID 1000). The counter file needs `chmod 666`, and the Traefik devboxes dir should be owned by `1000:1000` (set up during host provisioning).
 
 ### Known Paths
 
 These paths are always the same inside the OpenClaw container:
-- **OpenClaw data:** `/home/node/.openclaw`
-- **Traefik dynamic config:** `/etc/traefik/devboxes` (must be mounted into the OpenClaw container)
 
-If `/etc/traefik/devboxes` is not available, it means the OpenClaw container doesn't have it mounted — the user needs to add `-v $HOME/traefik/devboxes:/etc/traefik/devboxes` to their OpenClaw `docker run` command and restart.
+- **OpenClaw data:** `/home/node/.openclaw`
+- **Traefik dynamic config:** `/etc/traefik/devboxes` (must be mounted into the OpenClaw container; only if using Traefik routing)
 
 ## Onboarding Flow
 
@@ -61,11 +63,13 @@ When the user asks to set up the devbox skill, do the following:
 ### Step 1: Gather info and detect paths
 
 Ask the user for:
+
 - **Routing mode**: Traefik or Cloudflare Tunnel?
-- **Domain**: with wildcard DNS (`*.domain`) pointing to the server (e.g. `oc.example.com`)
+- **Domain**: with wildcard A-Record pointing to the server (e.g. `*.example.com`)
 - **GitHub token** (optional): for cloning private repos inside devboxes
 
 If **Cloudflare Tunnel** is chosen, also ask for:
+
 - **Cloudflare API token**: must have permissions for the zone (DNS edit + Tunnel edit)
 
 ### Step 2: Verify prerequisites
@@ -117,82 +121,101 @@ Store the values: `CF_API_TOKEN`, `CF_ZONE_ID`, `CF_ACCOUNT_ID`, `CF_TUNNEL_ID`,
 
 ```bash
 # Relative to this skill's directory
-echo "0" > scripts/.devbox-counter
-chmod 666 scripts/.devbox-counter
+echo "0" > .devbox-counter
+chmod 666 .devbox-counter
 ```
 
 ### Step 4: Configure OpenClaw
 
-Use `openclaw config set` to add the devbox agent. This is the **correct** way — do NOT manually edit openclaw.json or use `gateway config.apply`.
-
-Ref: https://docs.openclaw.ai/cli/config
-
-**⚠️ CRITICAL rules:**
-- `allowAgents` goes on the **main agent entry** in `agents.list[0].subagents`, NOT under `agents.defaults.subagents` (which doesn't support it — causes "Unrecognized key" error).
-- Never replace the entire `agents.list` — that removes the main agent and breaks OpenClaw.
-
-First, check how many agents already exist:
+First, check the current "agents" config:
 
 ```bash
-openclaw config get agents.list
+node /app/openclaw.mjs config get agents
 ```
 
-Find the next available index (e.g. if there's only `[0]` = main, use `[1]` for devbox). Then set each value:
+Then, decice what needs to be adjusted based on the existing config:
+
+### Main Agent
+
+IF there is an agent with `default: true`, note its index and add `subagents.allowAgents` to it:
 
 ```bash
-# Allow the main agent (index 0) to spawn devbox subagents
-openclaw config set agents.list[0].subagents.allowAgents '["devbox"]' --json
-
-# Add the devbox agent at the next index (e.g. [1])
-openclaw config set agents.list[1].id "devbox"
-openclaw config set agents.list[1].name "Devbox"
-openclaw config set agents.list[1].sandbox.mode "all"
-openclaw config set agents.list[1].sandbox.workspaceAccess "none"
-openclaw config set agents.list[1].sandbox.scope "session"
-openclaw config set agents.list[1].sandbox.browser.enabled true --json
-openclaw config set agents.list[1].sandbox.browser.cdpPort 9222 --json
-openclaw config set agents.list[1].sandbox.docker.image "ghcr.io/adshrc/openclaw-devbox:latest"
-openclaw config set agents.list[1].sandbox.docker.readOnlyRoot false --json
-openclaw config set agents.list[1].sandbox.docker.network "traefik"
-
-# Set env vars (replace placeholders with actual values)
-openclaw config set agents.list[1].sandbox.docker.env.DEVBOX_DOMAIN "{domain}"
-openclaw config set agents.list[1].sandbox.docker.env.ROUTING_MODE "{traefik|cloudflared}"
-openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_1 "app1"
-openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_2 "app2"
-openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_3 "app3"
-openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_4 "app4"
-openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_5 "app5"
-openclaw config set agents.list[1].sandbox.docker.env.ENABLE_VNC "true"
-openclaw config set agents.list[1].sandbox.docker.env.ENABLE_VSCODE "true"
-openclaw config set agents.list[1].sandbox.docker.env.GITHUB_TOKEN "{github_token}"
-# For cloudflared mode only:
-# openclaw config set agents.list[1].sandbox.docker.env.CF_TUNNEL_TOKEN "{token}"
-# openclaw config set agents.list[1].sandbox.docker.env.CF_API_TOKEN "{token}"
-# openclaw config set agents.list[1].sandbox.docker.env.CF_ZONE_ID "{zone_id}"
-# openclaw config set agents.list[1].sandbox.docker.env.CF_TUNNEL_ID "{tunnel_id}"
-
-# Set bind mounts
-openclaw config set agents.list[1].sandbox.docker.binds '["SKILL_DIR/scripts/.devbox-counter:/shared/.devbox-counter:rw", "/etc/traefik/devboxes:/traefik:rw"]' --json
-# For cloudflared mode, omit the traefik bind
+node /app/openclaw.mjs config set agents.list[{index}].subagents.allowAgents '["devbox"]' --json
 ```
 
-Replace `SKILL_DIR` with the absolute path to this skill's directory (resolve from the location of this SKILL.md).
-
-After all values are set, restart the gateway:
+then (if needed), set sandbox mode to `off` (since the main agent doesn't need a sandbox):
 
 ```bash
-openclaw gateway restart
+node /app/openclaw.mjs config set agents.list[{index}].sandbox.mode "off"
 ```
 
-**Common mistakes to avoid:**
-- ❌ Putting `allowAgents` under `agents.defaults.subagents` — causes "Unrecognized key" error
-- ❌ Replacing the entire `agents.list` — removes the main agent, breaking OpenClaw
-- ❌ Using `gateway config.apply` or `config.patch` with the full agents list — risky, use `openclaw config set` with specific paths instead
+ELSE there's no agent with `default: true`, create one at the next index with the necessary structure:
 
-### Step 5: Test
+```bash
+node /app/openclaw.mjs config set agents.list[{index}] '{
+  "id": "main",
+  "default": true,
+  "subagents": {
+    "allowAgents": [
+        "devbox"
+    ]
+  },
+  "sandbox": {
+    "mode": "off"
+  }
+}' --json
+```
 
-After the gateway restarts, spawn a test devbox to verify self-registration and URLs work.
+### Devbox Agent
+
+Now add the devbox agent at the next index in agents.list.
+
+Adjust the sandbox and docker config as needed (replace placeholders in curly braces):
+
+```bash
+node /app/openclaw.mjs config set agents.list[{index}] '{
+    "id": "devbox",
+    "name": "Devbox Agent",
+    "sandbox": {
+      "mode": "all",
+      "workspaceAccess": "none",
+      "scope": "session",
+      "docker": {
+        "image": "ghcr.io/adshrc/openclaw-devbox:latest",
+        "readOnlyRoot": false,
+        "network": "{traefik|cloudflared}",
+        "env": {
+          "ENABLE_VNC": "true",
+          "ENABLE_VSCODE": "true",
+          "DEVBOX_DOMAIN": "{domain}",
+          "APP_TAG_1": "app1",
+          "APP_TAG_2": "app2",
+          "APP_TAG_3": "app3",
+          "APP_TAG_4": "app4",
+          "APP_TAG_5": "app5",
+          "GITHUB_TOKEN": "{github_token}",
+          "ROUTING_MODE": "{traefik|cloudflared}",
+          # Cloudflare Tunnel variables (only needed if using cloudflared routing, exclude otherwise)
+          "CF_TUNNEL_TOKEN": "{cf_tunnel_token}",
+          "CF_API_TOKEN": "{cf_api_token}",
+          "CF_ZONE_ID": "{cf_zone_id}",
+          "CF_TUNNEL_ID": "{cf_tunnel_id}",
+        },
+        "binds": [
+          "/home/node/.openclaw/workspace/skills/devboxes/.devbox-counter:/shared/.devbox-counter:rw",
+          "/etc/traefik/devboxes:/traefik:rw" # Only needed for Traefik routing mode, exclude otherwise
+        ]
+      },
+      "browser": {
+        "enabled": true,
+        "cdpPort": 9222
+      }
+    }
+  }
+]' --json
+```
+
+The Gateway will restart automatically, a restart is not needed!
 
 ## Workflow: Spawn a Devbox
 
@@ -213,7 +236,7 @@ That's it! The container self-registers. No manual ID assignment or Traefik setu
 Read the counter to know the assigned ID, then report:
 
 ```bash
-DEVBOX_ID=$(cat scripts/.devbox-counter)
+DEVBOX_ID=$(cat .devbox-counter)
 ```
 
 - VSCode: `https://vscode-{id}.{domain}`
@@ -222,43 +245,43 @@ DEVBOX_ID=$(cat scripts/.devbox-counter)
 
 ### Cleanup
 
-OpenClaw manages container lifecycle — containers are removed when sessions end. Traefik route configs left behind are harmless (Traefik returns 502/404 for dead backends).
+OpenClaw manages container lifecycle — containers are removed when sessions end. Traefik route configs left behind are harmless.
 
 ## Environment Variables
 
 ### Static (set in openclaw.json sandbox.docker.env)
 
-| Variable | Example | Description |
-|----------|---------|-------------|
-| `ROUTING_MODE` | `traefik` or `cloudflared` | Routing backend (default: `traefik`) |
-| `GITHUB_TOKEN` | `ghp_...` | GitHub PAT for cloning |
-| `DEVBOX_DOMAIN` | `oc.example.com` | Base domain |
-| `APP_TAG_1..5` | `app1`, `app2`, ... | Route tags |
-| `ENABLE_VNC` | `true` | Enable noVNC |
-| `ENABLE_VSCODE` | `true` | Enable VSCode Web |
-| `CF_TUNNEL_TOKEN` | `eyJ...` | Cloudflare tunnel run token (cloudflared only) |
-| `CF_API_TOKEN` | `abc123` | CF API token for DNS registration (cloudflared only) |
-| `CF_ZONE_ID` | `xyz789` | CF zone ID for the domain (cloudflared only) |
-| `CF_TUNNEL_ID` | `uuid` | CF tunnel ID for CNAME targets (cloudflared only) |
+| Variable          | Example                    | Description                                          |
+| ----------------- | -------------------------- | ---------------------------------------------------- |
+| `ROUTING_MODE`    | `traefik` or `cloudflared` | Routing backend (default: `traefik`)                 |
+| `GITHUB_TOKEN`    | `ghp_...`                  | GitHub PAT for cloning                               |
+| `DEVBOX_DOMAIN`   | `oc.example.com`           | Base domain                                          |
+| `APP_TAG_1..5`    | `app1`, `app2`, ...        | Route tags                                           |
+| `ENABLE_VNC`      | `true`                     | Enable noVNC                                         |
+| `ENABLE_VSCODE`   | `true`                     | Enable VSCode Web                                    |
+| `CF_TUNNEL_TOKEN` | `eyJ...`                   | Cloudflare tunnel run token (cloudflared only)       |
+| `CF_API_TOKEN`    | `abc123`                   | CF API token for DNS registration (cloudflared only) |
+| `CF_ZONE_ID`      | `xyz789`                   | CF zone ID for the domain (cloudflared only)         |
+| `CF_TUNNEL_ID`    | `uuid`                     | CF tunnel ID for CNAME targets (cloudflared only)    |
 
 ### Dynamic (built by entrypoint, available in all shells)
 
-| Variable | Example | Description |
-|----------|---------|-------------|
-| `DEVBOX_ID` | `1` | Auto-assigned sequential ID |
-| `APP_URL_1..5` | `https://app1-1.oc.example.com` | Full URLs per app slot |
-| `APP_PORT_1..5` | `8003..8007` | Internal ports |
-| `VSCODE_URL` | `https://vscode-1.oc.example.com` | VSCode Web URL |
-| `NOVNC_URL` | `https://novnc-1.oc.example.com/vnc.html` | noVNC URL |
+| Variable        | Example                                   | Description                 |
+| --------------- | ----------------------------------------- | --------------------------- |
+| `DEVBOX_ID`     | `1`                                       | Auto-assigned sequential ID |
+| `APP_URL_1..5`  | `https://app1-1.oc.example.com`           | Full URLs per app slot      |
+| `APP_PORT_1..5` | `8003..8007`                              | Internal ports              |
+| `VSCODE_URL`    | `https://vscode-1.oc.example.com`         | VSCode Web URL              |
+| `NOVNC_URL`     | `https://novnc-1.oc.example.com/vnc.html` | noVNC URL                   |
 
 ### Ports
 
-| Port | Service |
-|------|---------|
-| 8000 | VSCode Web |
-| 8002 | noVNC |
-| 9222 | Chrome DevTools Protocol (CDP) |
-| 8003-8007 | App slots 1-5 |
+| Port      | Service                        |
+| --------- | ------------------------------ |
+| 8000      | VSCode Web                     |
+| 8002      | noVNC                          |
+| 9222      | Chrome DevTools Protocol (CDP) |
+| 8003-8007 | App slots 1-5                  |
 
 ## Browser
 
