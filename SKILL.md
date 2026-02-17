@@ -58,9 +58,9 @@ These paths are always the same inside the OpenClaw container:
 
 When the user asks to set up the devbox skill, do the following:
 
-### Step 0: Check Docker Access
+### Step 1: Verify Docker prerequisites
 
-Check if you have access to the Docker socket and Docker binary:
+Verify that you have access to the Docker socket and Docker binary:
 
 ```bash
 which docker
@@ -74,11 +74,23 @@ If not, abort here and tell the user they need to run the OpenClaw container wit
 -v /var/run/docker.sock:/var/run/docker.sock
 ```
 
-Also tell the User to set `chmod 666 /var/run/docker.sock` manually on the host, so that the OpenClaw container can work with it.
+and that they need to set `chmod 666 /var/run/docker.sock` manually on the host, so that the OpenClaw container can work with it.
 
-The OpenClaw container needs to be restarted then. After that, the User can ask to set up the devbox skill again.
+The OpenClaw container needs to be restarted then. After that, they can ask to set up the devbox skill again.
 
-### Step 1: Gather info and detect paths
+### Step 2: Validate the Host Mapping Path
+
+Find out what the host path/mapping is for `/home/node/.openclaw` inside the container:
+
+```bash
+docker inspect --format='{{range .Mounts}}{{if eq .Destination "/home/node/.openclaw"}}{{.Source}}{{end}}{{end}}' $(hostname)
+```
+
+Store the value as `HOST_OPENCLAW_PATH`. If `HOST_OPENCLAW_PATH` is a "system directory", OpenClaw will not be able to spawn a devbox. It will throw this error: "Mounting system directories (or Docker socket paths) into sandbox containers is not allowed. Use project-specific paths instead.".
+
+If the `HOST_OPENCLAW_PATH` is such a "system directory", abort here and tell the user they need to change their OpenClaw container setup to use a host path for OpenClaw data that is not a system directory. For example, they can create a directory like `/home/openclaw` or `/opt/openclaw` on the host.
+
+### Step 3: Gather info and detect paths
 
 Ask the user for:
 
@@ -90,7 +102,7 @@ If **Cloudflare Tunnel** is chosen, also ask for:
 
 - **Cloudflare API token**: must have permissions for the zone (DNS edit + Tunnel edit)
 
-### Step 2: Verify prerequisites
+### Step 4: Verify prerequisites
 
 #### If routing mode is Traefik:
 
@@ -99,7 +111,7 @@ If **Cloudflare Tunnel** is chosen, also ask for:
 ls /home/node/.openclaw/traefik
 ```
 
-If `/home/node/.openclaw/traefik` doesn't exist, tell the user they need to add `-v $HOME/openclaw/traefik:/home/node/.openclaw/traefik` to their OpenClaw container and restart it.
+If `/home/node/.openclaw/traefik` doesn't exist, tell the user they need to add e.g. `-v $HOME/openclaw/traefik:/home/node/.openclaw/traefik` to their OpenClaw container and restart it.
 
 #### If routing mode is Cloudflare Tunnel:
 
@@ -135,14 +147,14 @@ curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/
 
 Store the values: `CF_API_TOKEN`, `CF_ZONE_ID`, `CF_ACCOUNT_ID`, `CF_TUNNEL_ID`, `CF_TUNNEL_TOKEN`.
 
-### Step 3: Create counter file
+### Step 5: Create counter file
 
 ```bash
 echo "0" > /home/node/.openclaw/.devbox-counter
 chmod 666 /home/node/.openclaw/.devbox-counter
 ```
 
-### Step 4: Configure OpenClaw
+### Step 6: Configure OpenClaw
 
 First, check the current "agents" config:
 
@@ -152,7 +164,7 @@ node /app/openclaw.mjs config get agents
 
 Then, decice what needs to be adjusted based on the existing config:
 
-### Main Agent
+#### Main Agent
 
 IF there is an agent with `default: true`, note its index and add `subagents.allowAgents` to it:
 
@@ -183,7 +195,7 @@ node /app/openclaw.mjs config set agents.list[{index}] '{
 }' --json
 ```
 
-### Devbox Agent
+#### Devbox Agent
 
 1. Pull the Docker image so that it's available when OpenClaw tries to spawn it:
 
@@ -191,15 +203,7 @@ node /app/openclaw.mjs config set agents.list[{index}] '{
 docker pull ghcr.io/adshrc/openclaw-devbox:latest
 ```
 
-2. Find out what the host path/mapping is for `/home/node/.openclaw` inside the container:
-
-```bash
-docker inspect $(hostname)
-```
-
-Look for the `Mounts` section and find the source path that maps to `/home/node/.openclaw` in the container. Store the value as `HOST_OPENCLAW_PATH`.
-
-3. Now add the devbox agent at the next index in agents.list. Adjust the sandbox and docker config as needed (replace placeholders in curly braces):
+2. Now add the devbox agent at the next index in agents.list. Adjust the sandbox and docker config as needed (replace placeholders in curly braces):
 
 ```bash
 node /app/openclaw.mjs config set agents.list[{index}] '{
