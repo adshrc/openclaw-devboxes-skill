@@ -60,9 +60,9 @@ These paths are always the same inside the OpenClaw container:
 
 When the user asks to set up the devbox skill, do the following:
 
-### Step 1: Gather info and detect paths
+### Step 0: Check Docker Access
 
-First, check if you have access to the Docker socket and Docker binary:
+Check if you have access to the Docker socket and Docker binary:
 
 ```bash
 which docker
@@ -78,9 +78,11 @@ If not, abort here and tell the user they need to run the OpenClaw container wit
 
 Also tell the User to set `chmod 666 /var/run/docker.sock` manually on the host, so that the OpenClaw container can work with it.
 
-The OpenClaw container needs to be restarted then. After that, the User can ask to set up the devbox skill again and you can proceed.
+The OpenClaw container needs to be restarted then. After that, the User can ask to set up the devbox skill again.
 
-Then, ask the user for:
+### Step 1: Gather info and detect paths
+
+Ask the user for:
 
 - **Routing mode**: Traefik or Cloudflare Tunnel?
 - **Domain**: with wildcard A-Record pointing to the server (e.g. `*.example.com`)
