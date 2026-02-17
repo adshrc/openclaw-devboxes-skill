@@ -158,9 +158,9 @@ openclaw config set agents.list[1].sandbox.docker.network "traefik"
 # Set env vars (replace placeholders with actual values)
 openclaw config set agents.list[1].sandbox.docker.env.DEVBOX_DOMAIN "{domain}"
 openclaw config set agents.list[1].sandbox.docker.env.ROUTING_MODE "{traefik|cloudflared}"
-openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_1 "api"
-openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_2 "app"
-openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_3 "dashboard"
+openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_1 "app1"
+openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_2 "app2"
+openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_3 "app3"
 openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_4 "app4"
 openclaw config set agents.list[1].sandbox.docker.env.APP_TAG_5 "app5"
 openclaw config set agents.list[1].sandbox.docker.env.ENABLE_VNC "true"
@@ -233,7 +233,7 @@ OpenClaw manages container lifecycle — containers are removed when sessions en
 | `ROUTING_MODE` | `traefik` or `cloudflared` | Routing backend (default: `traefik`) |
 | `GITHUB_TOKEN` | `ghp_...` | GitHub PAT for cloning |
 | `DEVBOX_DOMAIN` | `oc.example.com` | Base domain |
-| `APP_TAG_1..5` | `api`, `app`, ... | Route tags |
+| `APP_TAG_1..5` | `app1`, `app2`, ... | Route tags |
 | `ENABLE_VNC` | `true` | Enable noVNC |
 | `ENABLE_VSCODE` | `true` | Enable VSCode Web |
 | `CF_TUNNEL_TOKEN` | `eyJ...` | Cloudflare tunnel run token (cloudflared only) |
@@ -246,7 +246,7 @@ OpenClaw manages container lifecycle — containers are removed when sessions en
 | Variable | Example | Description |
 |----------|---------|-------------|
 | `DEVBOX_ID` | `1` | Auto-assigned sequential ID |
-| `APP_URL_1..5` | `https://api-1.oc.example.com` | Full URLs per app slot |
+| `APP_URL_1..5` | `https://app1-1.oc.example.com` | Full URLs per app slot |
 | `APP_PORT_1..5` | `8003..8007` | Internal ports |
 | `VSCODE_URL` | `https://vscode-1.oc.example.com` | VSCode Web URL |
 | `NOVNC_URL` | `https://novnc-1.oc.example.com/vnc.html` | noVNC URL |
