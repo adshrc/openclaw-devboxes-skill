@@ -62,7 +62,25 @@ When the user asks to set up the devbox skill, do the following:
 
 ### Step 1: Gather info and detect paths
 
-Ask the user for:
+First, check if you have access to the Docker socket and Docker binary:
+
+```bash
+which docker
+docker version
+```
+
+If not, abort here and tell the user they need to run the OpenClaw container with
+
+```
+-v /usr/bin/docker:/usr/bin/docker:ro
+-v /var/run/docker.sock:/var/run/docker.sock
+```
+
+Also tell the User to set `chmod 666 /var/run/docker.sock` on the host, so that the OpenClaw container can manage sibling containers.
+
+The OpenClaw container needs to be restarted then. After that, the User can ask to set up the devbox skill again and you can proceed.
+
+Then, ask the user for:
 
 - **Routing mode**: Traefik or Cloudflare Tunnel?
 - **Domain**: with wildcard A-Record pointing to the server (e.g. `*.example.com`)
@@ -183,7 +201,7 @@ node /app/openclaw.mjs config set agents.list[{index}] '{
       "docker": {
         "image": "ghcr.io/adshrc/openclaw-devbox:latest",
         "readOnlyRoot": false,
-        "network": "{traefik|cloudflared}",
+        "network": "traefik", # Only needed for Traefik routing mode, exclude otherwise
         "env": {
           "ENABLE_VNC": "true",
           "ENABLE_VSCODE": "true",
