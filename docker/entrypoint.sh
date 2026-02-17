@@ -65,14 +65,78 @@ cp /etc/devbox.env /etc/profile.d/devbox.sh
 echo ". /etc/devbox.env" >> /root/.bashrc
 
 ########################################
-# Traefik self-registration
+# Routing: Traefik or Cloudflare Tunnel
 ########################################
-TRAEFIK_DIR="/traefik"
-if [ -d "$TRAEFIK_DIR" ]; then
-    CONTAINER_NAME=$(hostname)
-    CONFIG_FILE="${TRAEFIK_DIR}/devbox-${DEVBOX_ID}.yml"
+: "${ROUTING_MODE:=traefik}"
 
-    python3 -c "
+if [ "$ROUTING_MODE" = "cloudflared" ]; then
+    ########################################
+    # Cloudflare Tunnel routing
+    ########################################
+    echo "[devbox] Routing mode: cloudflared"
+
+    if [ -z "${CF_TUNNEL_TOKEN:-}" ]; then
+        echo "[devbox] ERROR: CF_TUNNEL_TOKEN is required for cloudflared routing mode"
+        exit 1
+    fi
+
+    # Build ingress config
+    CF_CONFIG_DIR="/etc/cloudflared"
+    mkdir -p "$CF_CONFIG_DIR"
+
+    cat > "${CF_CONFIG_DIR}/config.yml" << CFEOF
+ingress:
+  - hostname: vscode-${DEVBOX_ID}.${DEVBOX_DOMAIN}
+    service: http://localhost:${VSCODE_PORT}
+  - hostname: novnc-${DEVBOX_ID}.${DEVBOX_DOMAIN}
+    service: http://localhost:${NOVNC_PORT}
+$(for i in 1 2 3 4 5; do
+    tag_var="APP_TAG_$i"
+    port_var="APP_PORT_$i"
+    echo "  - hostname: ${!tag_var}-${DEVBOX_ID}.${DEVBOX_DOMAIN}"
+    echo "    service: http://localhost:${!port_var}"
+done)
+  - service: http_status:404
+CFEOF
+
+    echo "[devbox] Cloudflared config written: ${CF_CONFIG_DIR}/config.yml"
+
+    # Register DNS records via CF API
+    if [ -n "${CF_API_TOKEN:-}" ] && [ -n "${CF_ZONE_ID:-}" ] && [ -n "${CF_TUNNEL_ID:-}" ]; then
+        HOSTNAMES="vscode-${DEVBOX_ID}.${DEVBOX_DOMAIN} novnc-${DEVBOX_ID}.${DEVBOX_DOMAIN}"
+        for i in 1 2 3 4 5; do
+            tag_var="APP_TAG_$i"
+            HOSTNAMES="$HOSTNAMES ${!tag_var}-${DEVBOX_ID}.${DEVBOX_DOMAIN}"
+        done
+
+        for h in $HOSTNAMES; do
+            curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records" \
+                -H "Authorization: Bearer ${CF_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "{\"type\":\"CNAME\",\"name\":\"${h}\",\"content\":\"${CF_TUNNEL_ID}.cfargotunnel.com\",\"proxied\":true}" \
+                > /dev/null 2>&1 || true
+        done
+        echo "[devbox] DNS records registered for devbox-${DEVBOX_ID}"
+    else
+        echo "[devbox] WARNING: CF_API_TOKEN/CF_ZONE_ID/CF_TUNNEL_ID not set, skipping DNS registration"
+    fi
+
+    # Start cloudflared tunnel
+    cloudflared tunnel --config "${CF_CONFIG_DIR}/config.yml" run --token "${CF_TUNNEL_TOKEN}" &
+    echo "[devbox] Cloudflared tunnel started"
+
+else
+    ########################################
+    # Traefik self-registration (default)
+    ########################################
+    echo "[devbox] Routing mode: traefik"
+
+    TRAEFIK_DIR="/traefik"
+    if [ -d "$TRAEFIK_DIR" ]; then
+        CONTAINER_NAME=$(hostname)
+        CONFIG_FILE="${TRAEFIK_DIR}/devbox-${DEVBOX_ID}.yml"
+
+        python3 -c "
 import sys
 devbox_id = '${DEVBOX_ID}'
 container = '${CONTAINER_NAME}'
@@ -106,9 +170,10 @@ for name, port in services.items():
 with open('${CONFIG_FILE}', 'w') as f:
     f.write('\n'.join(lines) + '\n')
 "
-    echo "[devbox] Traefik config written: $CONFIG_FILE"
-else
-    echo "[devbox] WARNING: /traefik not mounted, skipping self-registration"
+        echo "[devbox] Traefik config written: $CONFIG_FILE"
+    else
+        echo "[devbox] WARNING: /traefik not mounted, skipping self-registration"
+    fi
 fi
 
 echo "[devbox] Starting services..."

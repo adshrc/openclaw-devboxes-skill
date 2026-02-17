@@ -46,6 +46,15 @@ RUN set -eux; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
+# Install cloudflared
+RUN set -eux; \
+    arch=$(dpkg --print-architecture); \
+    wget -q "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${arch}.deb" \
+        -O /tmp/cloudflared.deb; \
+    dpkg -i /tmp/cloudflared.deb; \
+    rm /tmp/cloudflared.deb; \
+    cloudflared --version
+
 ####################################################################################
 # Stage 2: Dev tools (ripgrep, fd, GitHub CLI)
 ####################################################################################
