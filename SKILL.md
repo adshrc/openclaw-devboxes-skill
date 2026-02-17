@@ -15,15 +15,13 @@ Resolve paths relative to this SKILL.md's parent directory.
 
 Key files:
 
-- `docker/Dockerfile` + `docker/entrypoint.sh` — devbox image (published as `ghcr.io/adshrc/openclaw-devbox:latest`, no need to build locally)
-- `.devbox-counter` — sequential ID counter (created by onboarding, bind-mounted as `/shared/.devbox-counter` inside devbox containers)
 - `references/setup-script-guide.md` — conventions for project setup scripts (`.openclaw/setup.sh`)
 
 ## Architecture
 
 - **Agent id:** `devbox` (configured in openclaw.json)
 - **Sandbox mode:** `all` / `scope: session` — one container per session
-- **Image:** `ghcr.io/adshrc/openclaw-devbox:latest` (pulled from GHCR, not built locally)
+- **Image:** `ghcr.io/adshrc/openclaw-devbox:latest` (pulled from GHCR)
 - **Network:** `traefik` (for Traefik routing) or default Docker network (for Cloudflare Tunnel routing)
 - **Browser:** `sandbox.browser.enabled: true`, CDP on port 9222
 
@@ -40,10 +38,10 @@ The container's entrypoint automatically:
 
 ### Bind Mounts (configured in openclaw.json)
 
-| Agent path              | Devbox container path     | Purpose       |
-| ----------------------- | ------------------------- | ------------- |
-| `.devbox-counter`       | `/shared/.devbox-counter` | ID counter    |
-| `/etc/traefik/devboxes` | `/traefik`                | Route configs |
+| Agent path                             | Devbox container path     | Purpose       |
+| -------------------------------------- | ------------------------- | ------------- |
+| `/home/node/.openclaw/.devbox-counter` | `/shared/.devbox-counter` | ID counter    |
+| `/home/node/.openclaw/traefik/configs` | `/traefik`                | Route configs |
 
 **Important:** Both paths must be writable by the sandbox containers (UID 1000). The counter file needs `chmod 666`, and the Traefik devboxes dir should be owned by `1000:1000` (set up during host provisioning).
 
@@ -52,7 +50,7 @@ The container's entrypoint automatically:
 These paths are always the same inside the OpenClaw container:
 
 - **OpenClaw data:** `/home/node/.openclaw`
-- **Traefik dynamic config:** `/etc/traefik/devboxes` (must be mounted into the OpenClaw container; only if using Traefik routing)
+- **Traefik dynamic config:** `/home/node/.openclaw/traefik/configs` (must be mounted into the OpenClaw container; only if using Traefik routing)
 
 ## Onboarding Flow
 
@@ -97,11 +95,11 @@ If **Cloudflare Tunnel** is chosen, also ask for:
 #### If routing mode is Traefik:
 
 ```bash
-# Check that /etc/traefik/devboxes is mounted
-ls /etc/traefik/devboxes
+# Check that /home/node/.openclaw/traefik/configs is mounted
+ls /home/node/.openclaw/traefik/configs
 ```
 
-If `/etc/traefik/devboxes` doesn't exist, tell the user they need to add `-v $HOME/traefik/devboxes:/etc/traefik/devboxes` to their OpenClaw container and restart it.
+If `/home/node/.openclaw/traefik/configs` doesn't exist, tell the user they need to add `-v $HOME/traefik/configs:/home/node/.openclaw/traefik/configs` to their OpenClaw container and restart it.
 
 #### If routing mode is Cloudflare Tunnel:
 
@@ -140,9 +138,8 @@ Store the values: `CF_API_TOKEN`, `CF_ZONE_ID`, `CF_ACCOUNT_ID`, `CF_TUNNEL_ID`,
 ### Step 3: Create counter file
 
 ```bash
-# Relative to this skill's directory
-echo "0" > .devbox-counter
-chmod 666 .devbox-counter
+echo "0" > $HOME/.openclaw/.devbox-counter
+chmod 666 $HOME/.openclaw/.devbox-counter
 ```
 
 ### Step 4: Configure OpenClaw
@@ -222,8 +219,8 @@ node /app/openclaw.mjs config set agents.list[{index}] '{
           "CF_TUNNEL_ID": "{cf_tunnel_id}",
         },
         "binds": [
-          "/home/node/.openclaw/workspace/skills/devboxes/.devbox-counter:/shared/.devbox-counter:rw",
-          "/etc/traefik/devboxes:/traefik:rw" # Only needed for Traefik routing mode, exclude otherwise
+          "/home/node/.openclaw/.devbox-counter:/shared/.devbox-counter:rw",
+          "/home/node/.openclaw/traefik/configs:/traefik:rw" # Only needed for Traefik routing mode, exclude otherwise
         ]
       },
       "browser": {

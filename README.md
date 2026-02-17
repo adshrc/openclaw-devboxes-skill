@@ -22,57 +22,67 @@ Whether you're working from your laptop, a tablet, or someone else's machine —
 ## Architecture
 
 ```
-+----------------------------------------------------------+
-|  Devbox Container (ghcr.io/adshrc/openclaw-devbox:latest)|
-|                                                          |
-|  +----------+  +----------+  +-------------------+       |
-|  |  VSCode  |  |  noVNC   |  |  Chromium (CDP)   |       |
-|  |  :8000   |  |  :8002   |  |  :9222            |       |
-|  +----------+  +----------+  +-------------------+       |
-|                                                          |
-|  App 1 :8003   App 2 :8004   App 3 :8005                |
-|  App 4 :8006   App 5 :8007                              |
-+----------------------------+-----------------------------+
++-----------------------------------------------------------+
+|  Devbox Container (ghcr.io/adshrc/openclaw-devbox:latest) |
+|                                                           |
+|  +----------+  +----------+  +-------------------+        |
+|  |  VSCode  |  |  noVNC   |  |  Chromium (CDP)   |        |
+|  |  :8000   |  |  :8002   |  |  :9222            |        |
+|  +----------+  +----------+  +-------------------+        |
+|                                                           |
+|       App 1 :8003   App 2 :8004   App 3 :8005             |
+|       App 4 :8006   App 5 :8007                           |
++----------------------------+------------------------------+
                              |
-                      +-----------+
-                      |  Traefik  |  <-- routes auto-configured
-                      +-----+-----+
-                            |
-                https://{tag}-{id}.{domain}
+                  +-----------------------+
+                  |  Traefik/Cloudflared  |
+                  +-----------------------+
+                             |
+             Browser: https://{tag}-{id}.{domain}
 ```
 
 ## Prerequisites
 
-### Routing: Traefik or Cloudflare Tunnels
+### 1. Docker Socket Access
+
+The OpenClaw container needs access to the Docker daemon on the host to manage devbox containers. Start your OpenClaw container with these additional flags:
+
+```bash
+-v /var/run/docker.sock:/var/run/docker.sock
+-v /usr/bin/docker:/usr/bin/docker:ro
+```
+
+On the host, set the correct permissions to make the Docker socket accessible:
+
+```bash
+chmod 666 /var/run/docker.sock
+```
+
+> **Note:** This must be done on the host machine before starting the OpenClaw container. If the container is already running, restart it after adding the volume mounts (e.g. docker-compose.yml)
+
+### 2. Routing: Traefik or Cloudflare Tunnels
 
 Devboxes need a way to expose services via URLs. Choose one:
 
 #### Option A: Traefik (self-managed reverse proxy)
 
-Best for: servers with open ports and an existing Traefik setup.
-
-Devbox containers automatically register Traefik routes on startup by writing config files to the Traefik dynamic directory.
+Best for: servers with an existing Traefik setup.
 
 > **If you haven't set up Traefik yet**, follow the [OpenClaw + Traefik Setup Guide](https://gist.github.com/adshrc/3cd9e8a714098f414635b7fe1ab5e573#file-openclaw_traefik-md).
 
-Your OpenClaw container needs the Traefik dynamic config directory mounted:
+Devbox containers automatically register Traefik routes on startup by writing config files to the Traefik config directory.
+
+Your OpenClaw container needs the Traefik config directory mounted. Start your OpenClaw container with this additional flag:
 
 ```bash
-docker run -d \
-  --name openclaw \
-  --network traefik \
-  --restart unless-stopped \
-  -v $HOME/openclaw:/home/node/.openclaw \
-  -v $HOME/openclaw/workspace:/home/node/.openclaw/workspace \
-  -v $HOME/traefik/devboxes:/etc/traefik/devboxes \
-  -e OPENCLAW_GATEWAY_TOKEN=$OPENCLAW_GATEWAY_TOKEN \
-  ghcr.io/openclaw/openclaw:latest \
-  node openclaw.mjs gateway --allow-unconfigured --bind lan
+-v $HOME/traefik/configs:/home/node/.openclaw/traefik/configs
 ```
+
+Make sure that you have a wildcard DNS record (`*.example.com`) pointing to your server.
 
 #### Option B: Cloudflare Tunnels (zero open ports)
 
-Best for: environments without a reverse proxy, behind NAT, or where you don't want to expose ports.
+Best for: environments without a reverse proxy, behind NAT, or where you don't want to expose any ports.
 
 Each devbox starts `cloudflared` internally and registers DNS records via the Cloudflare API. All traffic is routed through Cloudflare's network — no open ports or Traefik needed.
 
@@ -81,17 +91,28 @@ Requirements:
 - A **Cloudflare account** with a domain managed by Cloudflare
 - A **Cloudflare API token** with Zone:DNS:Edit and Account:Tunnel:Edit permissions
 
-The agent handles tunnel creation and configuration during onboarding.
+During onboarding, the agent will:
 
-### Wildcard DNS
+1. Validate your Cloudflare API token
+2. Look up the Zone ID for your domain
+3. Create a named tunnel (`openclaw-devboxes`)
+4. Store `CF_API_TOKEN`, `CF_ZONE_ID`, `CF_ACCOUNT_ID`, `CF_TUNNEL_ID`, and `CF_TUNNEL_TOKEN` in the agent config
 
-You need a wildcard DNS record (`*.your-domain.com`) pointing to your server (Traefik mode) or Cloudflare handles DNS automatically (Cloudflare Tunnel mode).
-
-## Quick Start
+## How to install and use
 
 ### 1. Install the skill
 
-Copy the `SKILL.md` and `references/` directories into your OpenClaw workspace:
+```bash
+npx clawhub@latest install devboxes
+```
+
+**OR**
+
+```bash
+git clone https://github.com/adshrc/openclaw-devboxes-skill
+```
+
+then copy the `SKILL.md` and `references/` directories into your OpenClaw workspace:
 
 ```
 $HOME/openclaw/workspace/skills/devboxes/
@@ -102,14 +123,13 @@ $HOME/openclaw/workspace/skills/devboxes/
 
 ### 2. Ask your agent to set it up
 
-Once the skill files are in place, simply ask your OpenClaw agent:
+Once installed, simply ask your OpenClaw agent:
 
 > "Set up the devboxes skill"
 
 The agent will read the skill's onboarding instructions and handle everything:
 
 - Pull the Docker image
-- Create the Traefik network (if needed)
 - Set up the counter file and permissions
 - Configure `openclaw.json` with the devboxes agent
 - Ask you for your domain and GitHub token
@@ -121,6 +141,17 @@ After setup, just ask:
 > "Spin up a devbox for project X"
 
 The agent spawns a container, waits for self-registration, and returns your URLs.
+
+## Bind Mounts
+
+The devbox agent config maps these paths from the OpenClaw container into each devbox:
+
+| Agent path                             | Devbox container path     | Purpose                                   |
+| -------------------------------------- | ------------------------- | ----------------------------------------- |
+| `/home/node/.openclaw/.devbox-counter` | `/shared/.devbox-counter` | ID counter                                |
+| `/home/node/.openclaw/traefik/configs` | `/traefik`                | Traefik route configs (Traefik mode only) |
+
+> **Important:** Both paths must be writable by sandbox containers (UID 1000). The counter file needs `chmod 666`, and the Traefik devboxes dir should be owned by `1000:1000`.
 
 ## Self-Registration
 
@@ -156,27 +187,47 @@ See [setup-script-guide.md](references/setup-script-guide.md) for full conventio
 
 ## Environment Variables
 
-| Variable          | Source     | Description                                |
-| ----------------- | ---------- | ------------------------------------------ |
-| `DEVBOX_ID`       | entrypoint | Auto-assigned sequential ID                |
-| `APP_URL_1..5`    | entrypoint | Full external URLs                         |
-| `APP_PORT_1..5`   | Dockerfile | Internal ports (8003-8007)                 |
-| `APP_TAG_1..5`    | config     | Route tags                                 |
-| `DEVBOX_DOMAIN`   | config     | Base domain                                |
-| `ROUTING_MODE`    | config     | `traefik` (default) or `cloudflared`       |
-| `GITHUB_TOKEN`    | config     | GitHub PAT                                 |
-| `CF_TUNNEL_TOKEN` | config     | Cloudflare tunnel token (cloudflared only) |
-| `CF_API_TOKEN`    | config     | CF API token for DNS (cloudflared only)    |
-| `CF_ZONE_ID`      | config     | CF zone ID (cloudflared only)              |
-| `CF_TUNNEL_ID`    | config     | CF tunnel ID (cloudflared only)            |
-| `VSCODE_URL`      | entrypoint | VSCode Web URL                             |
-| `NOVNC_URL`       | entrypoint | noVNC URL                                  |
+### Static (set in openclaw.json sandbox.docker.env)
+
+| Variable          | Example                    | Description                                          |
+| ----------------- | -------------------------- | ---------------------------------------------------- |
+| `ROUTING_MODE`    | `traefik` or `cloudflared` | Routing backend (default: `traefik`)                 |
+| `GITHUB_TOKEN`    | `ghp_...`                  | GitHub PAT for cloning                               |
+| `DEVBOX_DOMAIN`   | `example.com`              | Base domain                                          |
+| `APP_TAG_1..5`    | `app1`, `app2`, ...        | Route tags (e.g. use "app1" as "api")                |
+| `ENABLE_VNC`      | `true`                     | Enable noVNC                                         |
+| `ENABLE_VSCODE`   | `true`                     | Enable VSCode Web                                    |
+| `CF_TUNNEL_TOKEN` | `eyJ...`                   | Cloudflare tunnel run token (cloudflared only)       |
+| `CF_API_TOKEN`    | `abc123`                   | CF API token for DNS registration (cloudflared only) |
+| `CF_ZONE_ID`      | `xyz789`                   | CF zone ID for the domain (cloudflared only)         |
+| `CF_TUNNEL_ID`    | `uuid`                     | CF tunnel ID for CNAME targets (cloudflared only)    |
+
+### Dynamic (built by entrypoint, available in all shells)
+
+| Variable        | Example                                | Description                 |
+| --------------- | -------------------------------------- | --------------------------- |
+| `DEVBOX_ID`     | `1`                                    | Auto-assigned sequential ID |
+| `APP_URL_1..5`  | `https://app1-1.example.com`           | Full URLs per app slot      |
+| `APP_PORT_1..5` | `8003..8007`                           | Internal ports              |
+| `VSCODE_URL`    | `https://vscode-1.example.com`         | VSCode Web URL              |
+| `NOVNC_URL`     | `https://novnc-1.example.com/vnc.html` | noVNC URL                   |
+
+## Ports
+
+| Port      | Service                        |
+| --------- | ------------------------------ |
+| 8000      | VSCode Web                     |
+| 8002      | noVNC                          |
+| 9222      | Chrome DevTools Protocol (CDP) |
+| 8003-8007 | App slots 1-5                  |
+
+## Browser
+
+The devbox agent has browser access via Chromium CDP on port 9222. The subagent can use the `browser` tool to navigate, screenshot, and interact with apps running inside the container (use `http://localhost:{port}`).
 
 ## Important Notes
 
 - Sandbox containers run with **all Linux capabilities dropped** (`CapDrop: ALL`). Bind-mounted files/dirs must be world-writable.
-- Wildcard DNS (`*.your-domain.com`) must point to your server.
-- Traefik must be configured with a file provider watching the dynamic config directory.
 
 ## License
 
