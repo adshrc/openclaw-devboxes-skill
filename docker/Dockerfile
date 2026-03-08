@@ -139,6 +139,9 @@ WORKDIR /workspace
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+COPY devbox-init.sh /usr/local/bin/devbox-init
+RUN chmod +x /usr/local/bin/devbox-init
+
 # Re-declare ARGs
 ARG VSCODE_PORT=8000
 ARG NOVNC_PORT=8002

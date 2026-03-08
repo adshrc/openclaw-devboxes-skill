@@ -7,7 +7,7 @@ description: Manage development environment containers (devboxes) with web-acces
 
 Devboxes are OpenClaw sandbox containers running a custom image with VSCode Web, noVNC, Chromium (CDP), and up to 5 app ports routed via **Traefik** or **Cloudflare Tunnels**.
 
-OpenClaw manages the full container lifecycle. The **main agent** assigns each devbox a sequential ID by maintaining a local counter file, then passes `DEVBOX_ID` to the subagent task. The entrypoint uses this ID to write Traefik routes and build `APP_URL_*` env vars.
+OpenClaw manages the full container lifecycle. The **main agent** assigns each devbox a sequential ID by maintaining a local counter file, then passes `DEVBOX_ID` to the subagent task. The devbox agent runs `devbox-init` as its first action, which builds URL env vars, writes env files, and sets up routing.
 
 ## File Locations
 
@@ -30,18 +30,24 @@ Key files:
 The **main agent** manages the devbox counter:
 
 1. Reads and increments `/home/node/.openclaw/.devbox-counter` before spawning
-2. Passes the assigned `DEVBOX_ID` to the devbox agent via the task description
-3. The devbox agent must `export DEVBOX_ID={id}` as the very first action
+2. Includes the `DEVBOX_ID` in the task, instructing the devbox agent to run `devbox-init {id}` as its very first action
 
-### Entrypoint
+### Two-Phase Startup
 
-The container's entrypoint expects `DEVBOX_ID` to already be set as an environment variable and then:
+**Phase 1 — Entrypoint** (runs automatically at container start):
+
+- Starts core services: Xvfb, Chromium (CDP), VNC, VSCode Web
+- Does NOT require `DEVBOX_ID` — services are available immediately
+
+**Phase 2 — `devbox-init <id>`** (run by the sub-agent/devbox agent):
 
 1. Builds `APP_URL_1..5`, `VSCODE_URL`, `NOVNC_URL` from tags + domain + ID
 2. Writes `/etc/devbox.env` and `/etc/profile.d/devbox.sh` (available in all shells)
 3. Routes based on `ROUTING_MODE`:
    - **`traefik`** (default): Writes Traefik config to `/traefik/devbox-{id}.yml`
    - **`cloudflared`**: Generates cloudflared ingress config, registers DNS CNAME records via CF API, starts `cloudflared tunnel run`
+
+The `devbox-init` script is installed at `/usr/local/bin/devbox-init` in the Docker image.
 
 ### Bind Mounts (configured in openclaw.json)
 
@@ -288,7 +294,7 @@ Use `devbox-<id>` as the label and include the `DEVBOX_ID` in the task:
 sessions_spawn(
     agentId="devbox",
     label=f"devbox-{DEVBOX_ID}",
-    task=f"Your task description. Your DEVBOX_ID is {DEVBOX_ID} — run `export DEVBOX_ID={DEVBOX_ID}` as your very first action before doing anything else. GitHub token is in $GITHUB_TOKEN. After exporting DEVBOX_ID, env vars (APP_URL_*, etc.) are in your shell via `source /etc/profile.d/devbox.sh`. ALWAYS use /workspace as the working directory! When cloning, the structure must be /workspace/<repo>."
+    task=f"Your task description. Your DEVBOX_ID is {DEVBOX_ID} — run `devbox-init {DEVBOX_ID}` as your very first action before doing anything else. This sets up routing and writes env vars. After that, env vars (APP_URL_*, VSCODE_URL, etc.) are in your shell via `source /etc/profile.d/devbox.sh`. GitHub token is in $GITHUB_TOKEN. ALWAYS use /workspace as the working directory! When cloning, the structure must be /workspace/<repo>."
 )
 ```
 
@@ -321,7 +327,7 @@ OpenClaw manages container lifecycle — containers are removed when sessions en
 | `CF_ZONE_ID`      | `xyz789`                   | CF zone ID for the domain (cloudflared only)         |
 | `CF_TUNNEL_ID`    | `uuid`                     | CF tunnel ID for CNAME targets (cloudflared only)    |
 
-### Dynamic (built by entrypoint, available in all shells)
+### Dynamic (built by `devbox-init`, available in all shells after running it)
 
 | Variable        | Example                                | Description                 |
 | --------------- | -------------------------------------- | --------------------------- |
