@@ -35,7 +35,7 @@ RUN set -eux; \
         # Build tools
         build-essential pkg-config \
         # System utils
-        coreutils util-linux procps findutils grep sed gawk tmux \
+        coreutils util-linux procps findutils grep sed gawk tmux lsof \
         # Networking
         apt-transport-https gnupg lsb-release openssh-client \
         # Locale
