@@ -79,8 +79,8 @@ if [ "$ROUTING_MODE" = "cloudflared" ]; then
     ########################################
     echo "[devbox-init] Routing mode: cloudflared"
 
-    if [ -z "${CF_TUNNEL_TOKEN:-}" ]; then
-        echo "[devbox-init] ERROR: CF_TUNNEL_TOKEN is required for cloudflared routing mode"
+    if [ -z "${CF_TUNNEL_AUTH:-}" ]; then
+        echo "[devbox-init] ERROR: CF_TUNNEL_AUTH is required for cloudflared routing mode"
         exit 1
     fi
 
@@ -106,7 +106,7 @@ CFEOF
     echo "[devbox-init] Cloudflared config written: ${CF_CONFIG_DIR}/config.yml"
 
     # Register DNS records via CF API
-    if [ -n "${CF_API_TOKEN:-}" ] && [ -n "${CF_ZONE_ID:-}" ] && [ -n "${CF_TUNNEL_ID:-}" ]; then
+    if [ -n "${CF_API_AUTH:-}" ] && [ -n "${CF_ZONE_ID:-}" ] && [ -n "${CF_TUNNEL_ID:-}" ]; then
         HOSTNAMES="vscode-${DEVBOX_ID}.${DEVBOX_DOMAIN} novnc-${DEVBOX_ID}.${DEVBOX_DOMAIN}"
         for i in 1 2 3 4 5; do
             tag_var="APP_TAG_$i"
@@ -115,18 +115,18 @@ CFEOF
 
         for h in $HOSTNAMES; do
             curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records" \
-                -H "Authorization: Bearer ${CF_API_TOKEN}" \
+                -H "Authorization: Bearer ${CF_API_AUTH}" \
                 -H "Content-Type: application/json" \
                 -d "{\"type\":\"CNAME\",\"name\":\"${h}\",\"content\":\"${CF_TUNNEL_ID}.cfargotunnel.com\",\"proxied\":true}" \
                 > /dev/null 2>&1 || true
         done
         echo "[devbox-init] DNS records registered for devbox-${DEVBOX_ID}"
     else
-        echo "[devbox-init] WARNING: CF_API_TOKEN/CF_ZONE_ID/CF_TUNNEL_ID not set, skipping DNS registration"
+        echo "[devbox-init] WARNING: CF_API_AUTH/CF_ZONE_ID/CF_TUNNEL_ID not set, skipping DNS registration"
     fi
 
     # Start cloudflared tunnel
-    cloudflared tunnel --config "${CF_CONFIG_DIR}/config.yml" run --token "${CF_TUNNEL_TOKEN}" &
+    cloudflared tunnel --config "${CF_CONFIG_DIR}/config.yml" run --token "${CF_TUNNEL_AUTH}" &
     echo "[devbox-init] Cloudflared tunnel started"
 
 else

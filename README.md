@@ -98,7 +98,7 @@ During onboarding, the agent will:
 1. Validate your Cloudflare API token
 2. Look up the Zone ID for your domain
 3. Create a named tunnel (`openclaw-devboxes`)
-4. Store `CF_API_TOKEN`, `CF_ZONE_ID`, `CF_ACCOUNT_ID`, `CF_TUNNEL_ID`, and `CF_TUNNEL_TOKEN` in the agent config
+4. Store `CF_API_AUTH`, `CF_ZONE_ID`, `CF_ACCOUNT_ID`, `CF_TUNNEL_ID`, and `CF_TUNNEL_AUTH` in the agent config
 
 ## How to install and use
 
@@ -202,13 +202,13 @@ See [setup-script-guide.md](references/setup-script-guide.md) for full conventio
 | Variable          | Example                    | Description                                          |
 | ----------------- | -------------------------- | ---------------------------------------------------- |
 | `ROUTING_MODE`    | `traefik` or `cloudflared` | Routing backend (default: `traefik`)                 |
-| `GITHUB_TOKEN`    | `ghp_...`                  | GitHub PAT for cloning                               |
+| `GH_AUTH`         | `ghp_...`                  | GitHub PAT for cloning                               |
 | `DEVBOX_DOMAIN`   | `example.com`              | Base domain                                          |
 | `APP_TAG_1..5`    | `app1`, `app2`, ...        | Route tags (e.g. use "app1" as "api")                |
 | `ENABLE_VNC`      | `true`                     | Enable noVNC                                         |
 | `ENABLE_VSCODE`   | `true`                     | Enable VSCode Web                                    |
-| `CF_TUNNEL_TOKEN` | `eyJ...`                   | Cloudflare tunnel run token (cloudflared only)       |
-| `CF_API_TOKEN`    | `abc123`                   | CF API token for DNS registration (cloudflared only) |
+| `CF_TUNNEL_AUTH`  | `eyJ...`                   | Cloudflare tunnel run token (cloudflared only)       |
+| `CF_API_AUTH`     | `abc123`                   | CF API token for DNS registration (cloudflared only) |
 | `CF_ZONE_ID`      | `xyz789`                   | CF zone ID for the domain (cloudflared only)         |
 | `CF_TUNNEL_ID`    | `uuid`                     | CF tunnel ID for CNAME targets (cloudflared only)    |
 

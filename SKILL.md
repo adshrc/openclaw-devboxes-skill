@@ -138,7 +138,7 @@ Validate the CF API token and domain:
 ```bash
 # 1. Get zone ID for the domain (extract root domain from the provided domain)
 curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=${ROOT_DOMAIN}" \
-  -H "Authorization: Bearer ${CF_API_TOKEN}" | jq .
+  -H "Authorization: Bearer ${CF_API_AUTH}" | jq .
 
 # 2. Get account ID from the zone response
 # account_id = .result[0].account.id
@@ -150,7 +150,7 @@ Then create the tunnel:
 ```bash
 # 4. Create a named tunnel
 curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/cfd_tunnel" \
-  -H "Authorization: Bearer ${CF_API_TOKEN}" \
+  -H "Authorization: Bearer ${CF_API_AUTH}" \
   -H "Content-Type: application/json" \
   -d '{"name": "devboxes@'"$(hostname)"'", "config_src": "local", "tunnel_secret": "'$(openssl rand -base64 32)'"}' | jq .
 
@@ -159,7 +159,7 @@ curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/
 # tunnel_token = .result.token
 ```
 
-Store the values: `CF_API_TOKEN`, `CF_ZONE_ID`, `CF_ACCOUNT_ID`, `CF_TUNNEL_ID`, `CF_TUNNEL_TOKEN`.
+Store the values: `CF_API_AUTH`, `CF_ZONE_ID`, `CF_ACCOUNT_ID`, `CF_TUNNEL_ID`, `CF_TUNNEL_AUTH`.
 
 ### Step 5: Create counter file
 
@@ -224,13 +224,19 @@ docker pull ghcr.io/adshrc/openclaw-devbox:latest
 node /app/openclaw.mjs config set agents.list[{index}] '{
     "id": "devbox",
     "name": "Devbox Agent",
+    "tools": {
+      "exec": {
+        "host": "sandbox"
+      }
+    },
     "sandbox": {
       "mode": "all",
-      "workspaceAccess": "none",
+      "workspaceAccess": "rw",
       "scope": "session",
       "docker": {
         "image": "ghcr.io/adshrc/openclaw-devbox:latest",
         "readOnlyRoot": false,
+        "user": "0:0",
         "network": "traefik", # Only needed for Traefik routing mode, exclude otherwise
         "env": {
           "ENABLE_VNC": "true",
@@ -241,11 +247,11 @@ node /app/openclaw.mjs config set agents.list[{index}] '{
           "APP_TAG_3": "app3",
           "APP_TAG_4": "app4",
           "APP_TAG_5": "app5",
-          "GITHUB_TOKEN": "{github_token}",
+          "GH_AUTH": "{github_token}",
           "ROUTING_MODE": "{traefik|cloudflared}",
           # Cloudflare Tunnel variables (only needed if using cloudflared routing, exclude otherwise)
-          "CF_TUNNEL_TOKEN": "{cf_tunnel_token}",
-          "CF_API_TOKEN": "{cf_api_token}",
+          "CF_TUNNEL_AUTH": "{cf_tunnel_token}",
+          "CF_API_AUTH": "{cf_api_token}",
           "CF_ZONE_ID": "{cf_zone_id}",
           "CF_TUNNEL_ID": "{cf_tunnel_id}",
         },
@@ -294,7 +300,7 @@ Use `devbox-<id>` as the label and include the `DEVBOX_ID` in the task:
 sessions_spawn(
     agentId="devbox",
     label=f"devbox-{DEVBOX_ID}",
-    task=f"Your task description. Your DEVBOX_ID is {DEVBOX_ID} — run `devbox-init {DEVBOX_ID}` as your very first action before doing anything else. This sets up routing and writes env vars. After that, env vars (APP_URL_*, VSCODE_URL, etc.) are in your shell via `source /etc/profile.d/devbox.sh`. GitHub token is in $GITHUB_TOKEN. ALWAYS use /workspace as the working directory! When cloning, the structure must be /workspace/<repo>."
+    task=f"Your task description. Your DEVBOX_ID is {DEVBOX_ID} — run `devbox-init {DEVBOX_ID}` as your very first action before doing anything else. This sets up routing and writes env vars. After that, env vars (APP_URL_*, VSCODE_URL, etc.) are in your shell via `source /etc/profile.d/devbox.sh`. GitHub token is in $GH_AUTH. ALWAYS use /workspace as the working directory! When cloning, the structure must be /workspace/<repo>."
 )
 ```
 
@@ -317,13 +323,13 @@ OpenClaw manages container lifecycle — containers are removed when sessions en
 | Variable          | Example                    | Description                                          |
 | ----------------- | -------------------------- | ---------------------------------------------------- |
 | `ROUTING_MODE`    | `traefik` or `cloudflared` | Routing backend (default: `traefik`)                 |
-| `GITHUB_TOKEN`    | `ghp_...`                  | GitHub PAT for cloning                               |
+| `GH_AUTH`         | `ghp_...`                  | GitHub PAT for cloning                               |
 | `DEVBOX_DOMAIN`   | `example.com`              | Base domain                                          |
 | `APP_TAG_1..5`    | `app1`, `app2`, ...        | Route tags                                           |
 | `ENABLE_VNC`      | `true`                     | Enable noVNC                                         |
 | `ENABLE_VSCODE`   | `true`                     | Enable VSCode Web                                    |
-| `CF_TUNNEL_TOKEN` | `eyJ...`                   | Cloudflare tunnel run token (cloudflared only)       |
-| `CF_API_TOKEN`    | `abc123`                   | CF API token for DNS registration (cloudflared only) |
+| `CF_TUNNEL_AUTH`  | `eyJ...`                   | Cloudflare tunnel run token (cloudflared only)       |
+| `CF_API_AUTH`     | `abc123`                   | CF API token for DNS registration (cloudflared only) |
 | `CF_ZONE_ID`      | `xyz789`                   | CF zone ID for the domain (cloudflared only)         |
 | `CF_TUNNEL_ID`    | `uuid`                     | CF tunnel ID for CNAME targets (cloudflared only)    |
 
